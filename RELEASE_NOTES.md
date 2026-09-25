@@ -1,20 +1,18 @@
-# Minova Cinema Desktop 1.0.0
+# Minova Cinema Desktop 1.0.1
 
-The first public Windows release of Minova Cinema.
+This maintenance release fixes Plex connections through portless HTTPS addresses such as Tailscale Serve and reverse proxies.
 
-## Highlights
+## Fixes
 
-- Cinema-style Plex browsing for Home, Movies, Series, Collections, Watchlist, and search.
-- Native libmpv video embedded directly inside the application window—no separate player window.
-- Direct Play with automatic Plex HLS conversion fallback.
-- D3D11 hardware decoding, audio and subtitle track selection, seeking, volume, resync, and fullscreen controls.
-- Optional GPU scaling and ArtCNN upscaling modes for supported systems.
-- Persistent encrypted Plex credentials and cached artwork for fast return visits.
-- Mouse, keyboard, D-pad, and living-room remote navigation.
+- Portless `https://` server addresses now correctly use HTTPS port 443 instead of being rewritten to Plex port 32400.
+- Connection failures now explain which server could not be reached and suggest checking the PC's VPN or Tailscale connection.
+- Renderer errors no longer expose Electron's internal remote-method error prefix.
+- Adds automatic GitHub update checks, download progress, and an **Install and restart** action in Settings.
+
+Users on 1.0.0 need to install this release manually once because 1.0.0 did not contain the updater. Releases after 1.0.1 can update automatically.
 
 ## Installer verification
 
-`Minova-Cinema-Desktop-1.0.0-Setup.exe`
+`Minova-Cinema-Desktop-1.0.1-Setup.exe`
 
-SHA-256: `96253CF1D8A3AC082A12EA6F53027AD638114E0642E4A10E8BDBF8CAF6FF13A7`
-
+SHA-256: `7BAB1037A8C5D882E2088E112082112F0DEFF8DADD27A61594D70ADA875687C0`

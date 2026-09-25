@@ -1,7 +1,8 @@
 {
   "name": "minova-cinema-desktop",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Minova Cinema for Windows",
+  "repository": "https://github.com/minova-chromium/Minova-Cinema-Windows.git",
   "main": "src/main.cjs",
   "author": "Minova",
   "license": "GPL-3.0-only",
@@ -16,7 +17,9 @@
     "predist": "pnpm run prepare:native-player",
     "dist": "electron-builder --win nsis --publish never"
   },
-  "dependencies": {},
+  "dependencies": {
+    "electron-updater": "6.6.2"
+  },
   "devDependencies": {
     "electron": "^38.7.2",
     "electron-builder": "^26.0.12"
@@ -24,6 +27,12 @@
   "build": {
     "appId": "com.minova.cinema.desktop",
     "productName": "Minova Cinema",
+    "publish": {
+      "provider": "github",
+      "owner": "minova-chromium",
+      "repo": "Minova-Cinema-Windows",
+      "releaseType": "release"
+    },
     "asar": true,
     "files": [
       "src/**/*",
@@ -35,7 +44,10 @@
       {
         "from": "vendor/native-host",
         "to": "vendor/native-host",
-        "filter": ["MinovaCinema.LibMpvHost.exe", "libmpv-2.dll"]
+        "filter": [
+          "MinovaCinema.LibMpvHost.exe",
+          "libmpv-2.dll"
+        ]
       },
       {
         "from": "vendor/shaders",

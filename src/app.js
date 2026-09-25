@@ -17,6 +17,7 @@ const state = {
   timelineTimer: null,
   catalogSyncedAt: 0,
   syncing: false,
+  update: { status: 'idle', currentVersion: '', availableVersion: null, progress: 0, message: 'Automatic update checks are enabled.' },
 };
 
 const tabs = [
@@ -66,7 +67,36 @@ function showToast(message) {
 }
 
 function errorMessage(error) {
-  return error?.message || String(error || 'Something went wrong.');
+  return (error?.message || String(error || 'Something went wrong.'))
+    .replace(/^Error invoking remote method '[^']+':\s*/i, '')
+    .replace(/^(?:Error|TypeError):\s*/i, '');
+}
+
+function updateButtonLabel() {
+  if (state.update?.status === 'checking') return 'Checking…';
+  if (state.update?.status === 'downloading') return `Downloading… ${state.update.progress || 0}%`;
+  return 'Check for updates';
+}
+
+function refreshUpdateCard() {
+  const card = document.querySelector('.update-card');
+  if (!card) return;
+  const status = state.update || {};
+  const message = card.querySelector('[data-update-message]');
+  const version = card.querySelector('[data-update-version]');
+  const progress = card.querySelector('.update-progress');
+  const progressBar = card.querySelector('.update-progress span');
+  const check = card.querySelector('[data-action="check-update"]');
+  const install = card.querySelector('[data-action="install-update"]');
+  if (message) message.textContent = status.message || 'Automatic update checks are enabled.';
+  if (version) version.textContent = `Installed version ${status.currentVersion || '—'} · Updates from GitHub Releases`;
+  if (progress) progress.hidden = status.status !== 'downloading';
+  if (progressBar) progressBar.style.width = `${status.progress || 0}%`;
+  if (check) {
+    check.textContent = updateButtonLabel();
+    check.disabled = ['checking', 'downloading'].includes(status.status);
+  }
+  if (install) install.hidden = status.status !== 'downloaded';
 }
 
 function logoMarkup(size = 'full') {
@@ -242,6 +272,12 @@ function settingsPage() {
       <section class="settings-card window-card"><div class="settings-card-head"><span class="settings-icon">⛶</span><div><span class="settings-kicker">Display</span><h2>Window mode</h2></div></div>
         <p>Use the normal resizable window or switch to a distraction-free cinema view.</p>
         <button class="secondary settings-button" data-action="fullscreen">Toggle full screen <span class="button-hint">F11</span></button>
+      </section>
+      <section class="settings-card update-card"><div class="settings-card-head"><span class="settings-icon">↻</span><div><span class="settings-kicker">Application</span><h2>Automatic updates</h2></div></div>
+        <p data-update-message>${esc(state.update?.message || 'Automatic update checks are enabled.')}</p>
+        <div class="update-progress" ${state.update?.status === 'downloading' ? '' : 'hidden'}><span style="width:${Number(state.update?.progress || 0)}%"></span></div>
+        <div class="settings-actions"><button class="secondary settings-button" data-action="check-update" ${['checking','downloading'].includes(state.update?.status) ? 'disabled' : ''}>${esc(updateButtonLabel())}</button><button class="primary settings-button" data-action="install-update" ${state.update?.status === 'downloaded' ? '' : 'hidden'}>Install and restart</button></div>
+        <small class="update-version" data-update-version>Installed version ${esc(state.update?.currentVersion || '—')} · Updates from GitHub Releases</small>
       </section>
       <section class="settings-card controls-card"><div class="settings-card-head"><span class="settings-icon">⌨</span><div><span class="settings-kicker">Navigation</span><h2>Desktop controls</h2></div></div>
         <div class="shortcut-grid"><div><kbd>← ↑ ↓ →</kbd><span>Move</span></div><div><kbd>Enter</kbd><span>Select</span></div><div><kbd>Esc</kbd><span>Back</span></div><div><kbd>F11</kbd><span>Full screen</span></div></div>
@@ -624,6 +660,16 @@ document.addEventListener('click', async (event) => {
   else if (action === 'settings') pushRoute({ type: 'settings' });
   else if (action === 'fullscreen') window.minova.fullscreen();
   else if (action === 'sync') await syncCatalog(target);
+  else if (action === 'check-update') {
+    try {
+      state.update = await window.minova.updates.check();
+      refreshUpdateCard();
+    } catch (error) { showToast(errorMessage(error)); }
+  }
+  else if (action === 'install-update') {
+    try { await window.minova.updates.install(); }
+    catch (error) { showToast(errorMessage(error)); }
+  }
   else if (action === 'toggle-token') {
     const token = document.getElementById('token');
     const showing = token?.type === 'text';
@@ -682,9 +728,18 @@ window.minova.nativePlayer.onClosed(() => {
   render();
 });
 
+window.minova.updates.onState((update) => {
+  const previousStatus = state.update?.status;
+  state.update = update;
+  refreshUpdateCard();
+  if (update.status === 'downloaded' && previousStatus !== 'downloaded') {
+    showToast(`Minova Cinema ${update.availableVersion} is ready to install.`);
+  }
+});
+
 async function boot() {
   try {
-    state.config = await window.minova.config();
+    [state.config, state.update] = await Promise.all([window.minova.config(), window.minova.updates.getState()]);
     if (state.config.connected || state.config.demoMode) await loadCatalog();
     else { state.loading = false; render(); }
   } catch (error) { state.config = { connected: false, server: '', quality: 'original' }; state.loading = false; state.error = errorMessage(error); render(); }
@@ -776,7 +831,7 @@ window.__runMinovaQa = async function runMinovaQa() {
 
   document.querySelector('[data-action="settings"]').click(); await wait(140);
   check('Settings receives focus on its header control', document.activeElement?.dataset?.action === 'settings', activeLabel());
-  check('Settings uses the improved four-card dashboard', document.querySelectorAll('.settings-grid .settings-card').length === 4, document.querySelectorAll('.settings-grid .settings-card').length);
+  check('Settings includes the five-card dashboard with automatic updates', document.querySelectorAll('.settings-grid .settings-card').length === 5 && Boolean(document.querySelector('[data-action="check-update"]')), document.querySelectorAll('.settings-grid .settings-card').length);
   check('Settings dashboard uses two columns', getComputedStyle(document.querySelector('.settings-grid')).gridTemplateColumns.split(' ').length === 2, getComputedStyle(document.querySelector('.settings-grid')).gridTemplateColumns);
   await press('ArrowDown');
   check('Down enters playback quality', document.activeElement?.id === 'quality', activeLabel());

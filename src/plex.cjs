@@ -26,7 +26,10 @@ function normalizeServer(input) {
   const hasExplicitPort = /^https?:\/\/[^/]+:\d+(?:\/|$)/i.test(value);
   const url = new URL(value);
   if (!url.hostname) throw new Error('The Plex server address is not valid.');
-  if (!url.port && !hasExplicitPort) url.port = '32400';
+  // Portless HTTPS addresses are commonly reverse proxies or Tailscale Serve
+  // endpoints and must stay on the standard HTTPS port. A bare host or an
+  // HTTP address still receives Plex's conventional 32400 port.
+  if (!url.port && !hasExplicitPort && url.protocol === 'http:') url.port = '32400';
   url.pathname = '/';
   url.search = '';
   url.hash = '';
@@ -153,7 +156,14 @@ class PlexClient {
 
   async request(path, { method = 'GET', origin = this.server, extraHeaders = {} } = {}) {
     const url = /^https?:\/\//i.test(path) ? path : new URL(String(path).replace(/^\//, ''), `${origin}/`).toString();
-    const response = await fetch(url, { method, headers: plexHeaders(this.token, extraHeaders), signal: AbortSignal.timeout(45000) });
+    let response;
+    try {
+      response = await fetch(url, { method, headers: plexHeaders(this.token, extraHeaders), signal: AbortSignal.timeout(45000) });
+    } catch (error) {
+      const target = new URL(url);
+      const reason = error?.name === 'TimeoutError' ? 'The connection timed out.' : 'The server could not be reached.';
+      throw new Error(`${reason} Check that ${target.origin} opens on this PC and that its VPN or Tailscale connection is active.`);
+    }
     if (!response.ok) throw new Error(`Plex returned ${response.status} ${response.statusText}.`);
     if (response.status === 204) return {};
     const type = response.headers.get('content-type') || '';

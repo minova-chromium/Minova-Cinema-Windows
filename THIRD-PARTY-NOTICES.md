@@ -22,3 +22,11 @@ High and Ultra picture modes include ArtCNN GLSL shaders executed by mpv's nativ
 - `ArtCNN_C4F16.glsl` SHA-256: `03D0B3D31CB82C898A94A46663021A3E8F02C5A21D69C5CFDF0208DE4BFD453E`
 - `ArtCNN_C4F32.glsl` SHA-256: `F773BCE6CF5FE7E5E5D599A695EDD40DF5CD7A20C3D08C4D164D07591D5BEAD3`
 - License: MIT; a copy is included under `vendor/licenses/ArtCNN-MIT.txt`.
+
+## electron-updater
+
+Minova Cinema Desktop uses `electron-updater` to retrieve checksum-verified update metadata and release assets from the official GitHub repository.
+
+- Project: https://github.com/electron-userland/electron-builder
+- Package: `electron-updater` 6.6.2
+- License: MIT

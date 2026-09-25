@@ -18,6 +18,16 @@ contextBridge.exposeInMainWorld('minova', {
     stop: () => ipcRenderer.invoke('native-player:close'),
     onClosed: (callback) => ipcRenderer.on('native-player:closed', () => callback()),
   },
+  updates: {
+    getState: () => ipcRenderer.invoke('update:get-state'),
+    check: () => ipcRenderer.invoke('update:check'),
+    install: () => ipcRenderer.invoke('update:install'),
+    onState: (callback) => {
+      const listener = (_event, state) => callback(state);
+      ipcRenderer.on('update:state', listener);
+      return () => ipcRenderer.removeListener('update:state', listener);
+    },
+  },
   fullscreen: () => ipcRenderer.invoke('window:fullscreen'),
   openExternal: (url) => ipcRenderer.invoke('external:open', url),
 });

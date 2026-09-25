@@ -13,6 +13,7 @@ The Windows edition mirrors the Android TV 2.9 visual language while adapting it
 - D3D11 hardware decoding, native audio/subtitle track discovery, precise seeking, and fullscreen playback.
 - GPU scaling plus optional ArtCNN High and Ultra shader modes for 1080p-and-lower video.
 - Plex timeline progress plus watched and Watchlist updates.
+- Automatic update checks and in-app installation from official GitHub Releases.
 - Mouse, Arrow-key, Enter, Escape/Backspace, and fullscreen controls.
 
 ## Development
@@ -41,6 +42,8 @@ The browsing interface is rendered by Electron, but video is not played through 
 libmpv is controlled over a private local IPC pipe. The Plex token remains in the main process and is never exposed to the renderer or placed on a process command line. `scripts\Get-LibMpv.ps1` verifies the pinned runtime checksum, and `scripts\Build-LibMpvHost.ps1` compiles the small Win32 child-window host automatically before packaging.
 
 The desktop application uses the separate application ID `com.minova.cinema.desktop`; it does not change the Android application ID, APK signing key, or Android release pipeline.
+
+Installed production builds check the public `minova-chromium/Minova-Cinema-Windows` GitHub Releases feed shortly after launch and every six hours while running. Updates download in the background and can be installed from Settings with **Install and restart**. Release assets must include the generated installer, blockmap, and `latest.yml` metadata.
 
 ## License
 

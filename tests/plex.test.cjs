@@ -5,6 +5,8 @@ const { isPlexOwnedHost, isTrustedExternalArtworkUrl, mapMetadata, normalizeServ
 test('normalizes a LAN Plex address and supplies the default port', () => {
   assert.equal(normalizeServer('192.168.1.25'), 'http://192.168.1.25:32400');
   assert.equal(normalizeServer('https://plex.local:443/'), 'https://plex.local');
+  assert.equal(normalizeServer('https://plex.example/'), 'https://plex.example');
+  assert.equal(normalizeServer('https://plex.example:32400/'), 'https://plex.example:32400');
 });
 
 test('maps Plex metadata without exposing an authenticated URL', () => {

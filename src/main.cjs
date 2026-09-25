@@ -1,6 +1,7 @@
 const { app, BrowserWindow, desktopCapturer, ipcMain, nativeImage, protocol, safeStorage, shell } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
+const { autoUpdater } = require('electron-updater');
 const { PlexClient, isPlexOwnedHost, isTrustedExternalArtworkUrl, normalizeServer, plexHeaders, rewritePlaylist } = require('./plex.cjs');
 const { NativeMpvPlayer, mediaUrl } = require('./native-player.cjs');
 
@@ -11,6 +12,11 @@ let playerOverlay;
 let nativePlayer;
 let closingPlayerOverlay = false;
 let activeClient;
+let updateTimer;
+let updateState = {
+  status: 'idle', currentVersion: app.getVersion(), availableVersion: null,
+  progress: 0, message: 'Automatic update checks are enabled.',
+};
 const demoMode = process.argv.includes('--demo');
 const captureArgument = process.argv.find((value) => value.startsWith('--capture='));
 const captureView = process.argv.find((value) => value.startsWith('--capture-view='))?.slice('--capture-view='.length);
@@ -23,6 +29,7 @@ const qaTokenArgument = process.argv.find((value) => value.startsWith('--qa-toke
 const nativeQaReportArgument = process.argv.find((value) => value.startsWith('--native-qa-report='));
 const nativeQaMediaArgument = process.argv.find((value) => value.startsWith('--native-qa-media='));
 const nativeQaCaptureArgument = process.argv.find((value) => value.startsWith('--native-qa-capture='));
+const qaMode = Boolean(qaReportArgument || qaPersistenceSaveArgument || qaPersistenceCheckArgument || nativeQaReportArgument);
 
 if (qaProfileArgument) {
   app.setPath('userData', path.resolve(qaProfileArgument.slice('--qa-profile='.length)));
@@ -39,6 +46,61 @@ function readStored() {
 function writeStored(settings) {
   fs.mkdirSync(path.dirname(configPath()), { recursive: true });
   fs.writeFileSync(configPath(), JSON.stringify(settings, null, 2), 'utf8');
+}
+
+function publishUpdateState(patch = {}) {
+  updateState = { ...updateState, ...patch, currentVersion: app.getVersion() };
+  if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+    mainWindow.webContents.send('update:state', updateState);
+  }
+  return updateState;
+}
+
+async function checkForAppUpdates() {
+  if (!app.isPackaged || demoMode || qaMode) {
+    return publishUpdateState({ status: 'disabled', message: 'Update checks run in installed production builds.' });
+  }
+  if (['checking', 'downloading'].includes(updateState.status)) return updateState;
+  publishUpdateState({ status: 'checking', progress: 0, message: 'Checking GitHub for updates…' });
+  try {
+    await autoUpdater.checkForUpdates();
+  } catch {
+    publishUpdateState({ status: 'error', message: 'The update service could not be reached. Try again later.' });
+  }
+  return updateState;
+}
+
+function setupAutoUpdater() {
+  if (!app.isPackaged || demoMode || qaMode) {
+    publishUpdateState({ status: 'disabled', message: 'Update checks run in installed production builds.' });
+    return;
+  }
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.allowPrerelease = false;
+  autoUpdater.on('checking-for-update', () => publishUpdateState({ status: 'checking', progress: 0, message: 'Checking GitHub for updates…' }));
+  autoUpdater.on('update-available', (info) => publishUpdateState({
+    status: 'downloading', availableVersion: info.version, progress: 0,
+    message: `Downloading Minova Cinema ${info.version}…`,
+  }));
+  autoUpdater.on('download-progress', (progress) => publishUpdateState({
+    status: 'downloading', progress: Math.max(0, Math.min(100, Math.round(progress.percent || 0))),
+    message: `Downloading update… ${Math.round(progress.percent || 0)}%`,
+  }));
+  autoUpdater.on('update-not-available', () => publishUpdateState({
+    status: 'up-to-date', availableVersion: null, progress: 0,
+    message: `Minova Cinema ${app.getVersion()} is up to date.`,
+  }));
+  autoUpdater.on('update-downloaded', (info) => publishUpdateState({
+    status: 'downloaded', availableVersion: info.version, progress: 100,
+    message: `Minova Cinema ${info.version} is ready to install.`,
+  }));
+  autoUpdater.on('error', () => publishUpdateState({
+    status: 'error', progress: 0, message: 'The update service could not be reached. Try again later.',
+  }));
+  setTimeout(() => checkForAppUpdates(), 5000);
+  updateTimer = setInterval(() => checkForAppUpdates(), 6 * 60 * 60 * 1000);
+  updateTimer.unref?.();
 }
 
 function removeObsoleteStandalonePlayer() {
@@ -155,6 +217,13 @@ async function installMediaProtocol() {
 }
 
 function registerIpc() {
+  ipcMain.handle('update:get-state', () => updateState);
+  ipcMain.handle('update:check', () => checkForAppUpdates());
+  ipcMain.handle('update:install', () => {
+    if (updateState.status !== 'downloaded') throw new Error('No downloaded update is ready to install.');
+    setImmediate(() => autoUpdater.quitAndInstall(false, true));
+    return true;
+  });
   ipcMain.handle('config:get', () => {
     const connection = getConnection();
     const stored = readStored();
@@ -529,7 +598,9 @@ app.whenReady().then(async () => {
   await installMediaProtocol();
   registerIpc();
   createWindow();
+  setupAutoUpdater();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+app.on('before-quit', () => { if (updateTimer) clearInterval(updateTimer); });
