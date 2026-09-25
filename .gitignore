@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.artifacts/
+*.tgz
+*.log
+
+# Downloaded and generated native playback binaries
+vendor/mpv/
+vendor/native-host/*.dll
+vendor/native-host/*.exe
+
+# Local development state
+.env
+.env.*
+settings.json
+

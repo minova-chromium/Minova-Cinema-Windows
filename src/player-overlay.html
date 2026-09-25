@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self';">
+  <title>Minova Cinema Player</title>
+  <link rel="stylesheet" href="player-overlay.css">
+</head>
+<body>
+  <main id="player-overlay" class="controls-visible loading">
+    <button id="surface" aria-label="Play or pause"></button>
+    <header class="player-chrome player-header">
+      <button class="icon-button" data-action="back" aria-label="Close player">←</button>
+      <div class="title-block"><strong id="title">Minova Cinema</strong><span id="transport">Direct Play</span></div>
+      <div class="status-badges"><span id="quality-badge">DIRECT PLAY</span><span id="enhancement-badge">GPU Balanced</span></div>
+    </header>
+
+    <section id="message" class="message"><span class="spinner"></span><strong>Preparing playback…</strong></section>
+    <section id="notice" class="notice" hidden></section>
+    <section id="track-menu" class="track-menu" hidden></section>
+
+    <footer class="player-chrome player-controls">
+      <input id="seek" class="seek" type="range" min="0" max="1" value="0" step="0.1" aria-label="Playback position">
+      <div class="control-row">
+        <button class="small-button" data-action="rewind" aria-label="Rewind ten seconds">↶ 10</button>
+        <button class="play-button" data-action="play" aria-label="Pause">❚❚</button>
+        <button class="small-button" data-action="forward" aria-label="Forward ten seconds">10 ↷</button>
+        <span id="time">0:00 / 0:00</span>
+        <span class="spacer"></span>
+        <button class="icon-button" data-action="mute" aria-label="Mute">🔊</button>
+        <input id="volume" class="volume" type="range" min="0" max="100" value="100" step="1" aria-label="Volume">
+        <button class="menu-button" data-action="audio">Audio</button>
+        <button class="menu-button" data-action="subtitles">Subtitles: Off</button>
+        <button class="menu-button" data-action="resync">Resync</button>
+        <button class="menu-button accent-outline" data-action="enhancement">GPU Balanced</button>
+        <button class="icon-button accent-outline" data-action="fullscreen" aria-label="Fullscreen">⛶</button>
+      </div>
+    </footer>
+  </main>
+  <script src="player-overlay.js"></script>
+</body>
+</html>

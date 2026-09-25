@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Minova Prism M</title>
+  <desc id="desc">A geometric M formed by two folded blue and teal navigation ribbons on a dark rounded tile.</desc>
+  <defs>
+    <linearGradient id="tile" x1="72" y1="48" x2="440" y2="464" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#162536"/>
+      <stop offset="0.5" stop-color="#0D1723"/>
+      <stop offset="1" stop-color="#080D14"/>
+    </linearGradient>
+    <linearGradient id="leftRibbon" x1="116" y1="152" x2="266" y2="348" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1769FF"/>
+      <stop offset="0.52" stop-color="#0798F2"/>
+      <stop offset="1" stop-color="#16D8E4"/>
+    </linearGradient>
+    <linearGradient id="rightRibbon" x1="246" y1="332" x2="398" y2="150" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0798F2"/>
+      <stop offset="0.48" stop-color="#16D8E4"/>
+      <stop offset="1" stop-color="#24D3B5"/>
+    </linearGradient>
+    <linearGradient id="edgeLight" x1="150" y1="136" x2="360" y2="302" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#9DEBFF" stop-opacity="0.72"/>
+      <stop offset="0.48" stop-color="#7EE8F2" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#B5FFE9" stop-opacity="0.58"/>
+    </linearGradient>
+    <filter id="markShadow" x="72" y="112" width="368" height="300" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#02060B" flood-opacity="0.55"/>
+    </filter>
+  </defs>
+  <rect x="24" y="24" width="464" height="464" rx="104" fill="url(#tile)"/>
+  <rect x="24.75" y="24.75" width="462.5" height="462.5" rx="103.25" fill="none" stroke="#34465A" stroke-opacity="0.58" stroke-width="1.5"/>
+  <path d="M70 386L215 96H430L287 386H70Z" fill="#0B2232" opacity="0.22"/>
+  <g filter="url(#markShadow)">
+    <path d="M112 360V152H180L256 244V336L180 246V360H112Z" fill="url(#leftRibbon)"/>
+    <path d="M256 244L332 152H400V360H332V246L256 336V244Z" fill="url(#rightRibbon)"/>
+    <path d="M112 152H180L256 244L238 266L164 176H112V152Z" fill="url(#edgeLight)" opacity="0.5"/>
+    <path d="M256 244L332 152H400V176H348L274 266L256 244Z" fill="url(#edgeLight)" opacity="0.36"/>
+    <path d="M256 244L274 266L256 336L238 314L256 244Z" fill="#087EBE" opacity="0.68"/>
+    <path d="M180 246L204 275V360H180V246Z" fill="#0569C8" opacity="0.42"/>
+    <path d="M308 275L332 246V360H308V275Z" fill="#12B9B7" opacity="0.36"/>
+  </g>
+</svg>

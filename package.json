@@ -1,0 +1,66 @@
+{
+  "name": "minova-cinema-desktop",
+  "version": "1.0.0",
+  "description": "Minova Cinema for Windows",
+  "main": "src/main.cjs",
+  "author": "Minova",
+  "license": "GPL-3.0-only",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "demo": "electron . --demo",
+    "test": "node --test tests/*.test.cjs",
+    "prepare:native-player": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Get-LibMpv.ps1 && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Build-LibMpvHost.ps1",
+    "prepack": "pnpm run prepare:native-player",
+    "pack": "electron-builder --dir --win",
+    "predist": "pnpm run prepare:native-player",
+    "dist": "electron-builder --win nsis --publish never"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "^38.7.2",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.minova.cinema.desktop",
+    "productName": "Minova Cinema",
+    "asar": true,
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "THIRD-PARTY-NOTICES.md",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "vendor/native-host",
+        "to": "vendor/native-host",
+        "filter": ["MinovaCinema.LibMpvHost.exe", "libmpv-2.dll"]
+      },
+      {
+        "from": "vendor/shaders",
+        "to": "vendor/shaders"
+      },
+      {
+        "from": "vendor/licenses",
+        "to": "vendor/licenses"
+      }
+    ],
+    "directories": {
+      "buildResources": "assets",
+      "output": "dist"
+    },
+    "win": {
+      "icon": "assets/minova-cinema.ico",
+      "target": "nsis",
+      "artifactName": "Minova-Cinema-Desktop-${version}-Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Minova Cinema"
+    }
+  }
+}

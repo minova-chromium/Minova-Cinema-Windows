@@ -1,0 +1,47 @@
+# Minova Cinema Desktop
+
+The Windows edition mirrors the Android TV 2.9 visual language while adapting it for mouse, keyboard, and living-room remote input.
+
+## Features
+
+- Direct connection to a local Plex Media Server.
+- Windows-encrypted Plex token; the renderer never receives the token.
+- Home hero, Continue Watching, discovery shelves, Movies, Series, Collections, Watchlist, and search.
+- Rows and grid layouts with genre filtering.
+- Movie, series, season, and episode details.
+- Embedded libmpv Direct Play with automatic Plex HLS conversion fallback.
+- D3D11 hardware decoding, native audio/subtitle track discovery, precise seeking, and fullscreen playback.
+- GPU scaling plus optional ArtCNN High and Ultra shader modes for 1080p-and-lower video.
+- Plex timeline progress plus watched and Watchlist updates.
+- Mouse, Arrow-key, Enter, Escape/Backspace, and fullscreen controls.
+
+## Development
+
+```powershell
+pnpm install --frozen-lockfile
+pnpm test
+pnpm start
+```
+
+`pnpm demo` opens a credential-free visual demo. Demo playback is deliberately disabled.
+
+## Packaging
+
+Minova Cinema Desktop supports 64-bit Windows 10 and Windows 11. Build the installer from this repository with:
+
+```powershell
+pnpm install --frozen-lockfile
+pnpm run dist
+```
+
+The installer is written to `dist`. During packaging, the build scripts download the checksum-pinned libmpv runtime and compile the native Windows host automatically.
+
+The browsing interface is rendered by Electron, but video is not played through Chromium. A pinned `libmpv-2.dll` is loaded by Minova's native Windows media host and renders into a child HWND inside the main Electron window. The child surface has no separate top-level window, taskbar entry, focus target, or independent close button. Electron supplies the cinema-styled playback controls above that embedded surface.
+
+libmpv is controlled over a private local IPC pipe. The Plex token remains in the main process and is never exposed to the renderer or placed on a process command line. `scripts\Get-LibMpv.ps1` verifies the pinned runtime checksum, and `scripts\Build-LibMpvHost.ps1` compiles the small Win32 child-window host automatically before packaging.
+
+The desktop application uses the separate application ID `com.minova.cinema.desktop`; it does not change the Android application ID, APK signing key, or Android release pipeline.
+
+## License
+
+Minova Cinema Desktop is licensed under the GNU General Public License v3.0. See [LICENSE](LICENSE). Third-party component notices are listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
