@@ -13,6 +13,7 @@ The Windows edition mirrors the Android TV 2.9 visual language while adapting it
 - D3D11 hardware decoding, native audio/subtitle track discovery, precise seeking, and fullscreen playback.
 - GPU scaling plus optional ArtCNN High and Ultra shader modes for 1080p-and-lower video.
 - Plex timeline progress plus watched and Watchlist updates.
+- Continue elsewhere handoff with confirmed Plex progress saving and foreground Continue Watching refresh.
 - Automatic update checks and in-app installation from official GitHub Releases.
 - Mouse, Arrow-key, Enter, Escape/Backspace, and fullscreen controls.
 

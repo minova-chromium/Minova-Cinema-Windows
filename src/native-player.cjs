@@ -57,6 +57,7 @@ class NativeMpvPlayer extends EventEmitter {
     this.pending = new Map();
     this.fallbackUsed = false;
     this.closed = false;
+    this.handoffCommitted = false;
     this.timelineTimer = null;
     this.resumeApplied = false;
     this.state = {
@@ -353,6 +354,14 @@ class NativeMpvPlayer extends EventEmitter {
     await this.client.timeline(this.item, playbackState, this.state.position * 1000);
   }
 
+  async handoff() {
+    await this.command(['set_property', 'pause', true]);
+    await this.refreshProperties();
+    await this.reportTimeline('paused');
+    this.handoffCommitted = true;
+    return this.snapshot();
+  }
+
   snapshot() {
     return JSON.parse(JSON.stringify(this.state));
   }
@@ -376,7 +385,7 @@ class NativeMpvPlayer extends EventEmitter {
     if (bridge?.stdin && !bridge.stdin.destroyed && !bridge.stdin.writableEnded) {
       try { bridge.stdin.end('hide\nquit\n', () => {}); } catch {}
     }
-    await this.reportTimeline('stopped').catch(() => {});
+    if (!this.handoffCommitted) await this.reportTimeline('stopped').catch(() => {});
     if (this.socket && !this.socket.destroyed) {
       try { this.socket.write(`${JSON.stringify({ command: ['quit'] })}\n`); } catch {}
       this.socket.destroy();

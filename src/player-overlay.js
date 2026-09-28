@@ -12,6 +12,12 @@ const time = document.getElementById('time');
 let state = { paused: false, position: 0, duration: 0, volume: 100, muted: false, tracks: [], enhancement: 'balanced' };
 let hideTimer;
 let seeking = false;
+let miniPlayer = false;
+let miniPlayerPinned = false;
+let resizeSession = null;
+let resizeFrame = null;
+let moveSession = null;
+let moveFrame = null;
 
 function clock(value) {
   const seconds = Math.max(0, Math.floor(Number(value) || 0));
@@ -22,6 +28,23 @@ function clock(value) {
 }
 
 function button(action) { return document.querySelector(`[data-action="${action}"]`); }
+
+function renderWindowMode(mode = {}) {
+  miniPlayer = Boolean(mode.miniPlayer);
+  miniPlayerPinned = Boolean(mode.miniPlayerPinned);
+  document.body.classList.toggle('mini-player', miniPlayer);
+  const control = button('mini-player');
+  control.textContent = miniPlayer ? '▢' : '▣';
+  control.setAttribute('aria-label', miniPlayer ? 'Restore full player' : 'Pop out mini-player');
+  control.title = miniPlayer ? 'Restore full player' : 'Pop out mini-player';
+  const pin = button('pin');
+  pin.classList.toggle('active', miniPlayerPinned);
+  pin.setAttribute('aria-pressed', String(miniPlayerPinned));
+  pin.setAttribute('aria-label', miniPlayerPinned ? 'Unpin mini-player' : 'Keep mini-player on top');
+  pin.title = miniPlayerPinned ? 'Unpin mini-player' : 'Keep mini-player on top';
+  if (miniPlayer) trackMenu.hidden = true;
+  showControls(true);
+}
 
 function showControls(sticky = false) {
   root.classList.remove('controls-hidden');
@@ -84,6 +107,24 @@ async function command(action, value) {
   catch (error) { render({ loading: false, error: error.message || String(error) }); }
 }
 
+async function handoff() {
+  const control = button('handoff');
+  if (control.disabled) return;
+  control.disabled = true;
+  control.textContent = 'Saving…';
+  notice.textContent = 'Saving your exact position to Plex…';
+  notice.hidden = false;
+  showControls(true);
+  try {
+    await window.nativePlayer.handoff();
+  } catch (error) {
+    control.disabled = false;
+    control.textContent = 'Continue elsewhere';
+    notice.textContent = `Could not save your position: ${error.message || String(error)}`;
+    notice.hidden = false;
+  }
+}
+
 function showTracks(kind) {
   const isAudio = kind === 'audio';
   const tracks = (state.tracks || []).filter((track) => track.type === (isAudio ? 'audio' : 'sub'));
@@ -111,6 +152,7 @@ function showTracks(kind) {
 }
 
 document.addEventListener('click', (event) => {
+  if (event.target.closest('#resize-handle') || miniPlayer && event.target.closest('.player-header')) return;
   const control = event.target.closest('[data-action]');
   if (!control) {
     if (!event.target.closest('#track-menu')) command('toggle-pause');
@@ -124,7 +166,10 @@ document.addEventListener('click', (event) => {
   else if (action === 'mute') command('mute');
   else if (action === 'audio') showTracks('audio');
   else if (action === 'subtitles') showTracks('subtitle');
+  else if (action === 'handoff') handoff();
   else if (action === 'resync') command('resync');
+  else if (action === 'pin') window.nativePlayer.pinMiniPlayer(!miniPlayerPinned).then((pinned) => renderWindowMode({ miniPlayer: true, miniPlayerPinned: pinned }));
+  else if (action === 'mini-player') window.nativePlayer.miniPlayer(!miniPlayer).then((enabled) => renderWindowMode({ miniPlayer: enabled, miniPlayerPinned: enabled }));
   else if (action === 'fullscreen') window.nativePlayer.fullscreen();
   else if (action === 'enhancement') {
     const modes = ['off', 'balanced', 'high', 'ultra'];
@@ -138,6 +183,50 @@ seek.addEventListener('input', () => { time.textContent = `${clock(seek.value)} 
 seek.addEventListener('change', () => { seeking = false; command('seek-absolute', Number(seek.value)); });
 volume.addEventListener('input', () => command('volume', Number(volume.value)));
 
+const resizeHandle = document.getElementById('resize-handle');
+resizeHandle.addEventListener('pointerdown', async (event) => {
+  if (!miniPlayer || event.button !== 0) return;
+  event.preventDefault();
+  const mode = await window.nativePlayer.miniPlayerState();
+  if (!mode?.bounds) return;
+  resizeSession = { x: event.screenX, y: event.screenY, width: mode.bounds.width, height: mode.bounds.height };
+  resizeHandle.setPointerCapture(event.pointerId);
+});
+resizeHandle.addEventListener('pointermove', (event) => {
+  if (!resizeSession || !miniPlayer) return;
+  const size = {
+    width: resizeSession.width + event.screenX - resizeSession.x,
+    height: resizeSession.height + event.screenY - resizeSession.y,
+  };
+  cancelAnimationFrame(resizeFrame);
+  resizeFrame = requestAnimationFrame(() => window.nativePlayer.resizeMiniPlayer(size));
+});
+for (const eventName of ['pointerup', 'pointercancel']) {
+  resizeHandle.addEventListener(eventName, () => { resizeSession = null; });
+}
+
+const moveHandle = document.querySelector('.player-header');
+moveHandle.addEventListener('pointerdown', async (event) => {
+  if (!miniPlayer || event.button !== 0 || event.target.closest('button')) return;
+  event.preventDefault();
+  const mode = await window.nativePlayer.miniPlayerState();
+  if (!mode?.bounds) return;
+  moveSession = { x: event.screenX, y: event.screenY, left: mode.bounds.x, top: mode.bounds.y };
+  moveHandle.setPointerCapture(event.pointerId);
+});
+moveHandle.addEventListener('pointermove', (event) => {
+  if (!moveSession || !miniPlayer) return;
+  const position = {
+    x: moveSession.left + event.screenX - moveSession.x,
+    y: moveSession.top + event.screenY - moveSession.y,
+  };
+  cancelAnimationFrame(moveFrame);
+  moveFrame = requestAnimationFrame(() => window.nativePlayer.moveMiniPlayer(position));
+});
+for (const eventName of ['pointerup', 'pointercancel']) {
+  moveHandle.addEventListener(eventName, () => { moveSession = null; });
+}
+
 document.addEventListener('keydown', (event) => {
   if (event.target.matches('input[type="range"]') && !['ArrowUp', 'ArrowDown'].includes(event.key)) return;
   if (event.key === 'Escape' || event.key === 'Backspace') { event.preventDefault(); window.nativePlayer.close(); }
@@ -148,6 +237,8 @@ document.addEventListener('keydown', (event) => {
   else if (event.key === 'ArrowUp') { event.preventDefault(); command('volume', Math.min(100, state.volume + 5)); }
   else if (event.key === 'ArrowDown') { event.preventDefault(); command('volume', Math.max(0, state.volume - 5)); }
   else if (event.key.toLowerCase() === 'm') command('mute');
+  else if (event.key.toLowerCase() === 'h') { event.preventDefault(); handoff(); }
+  else if (event.key.toLowerCase() === 'p') { event.preventDefault(); window.nativePlayer.miniPlayer(!miniPlayer).then((enabled) => renderWindowMode({ miniPlayer: enabled, miniPlayerPinned: enabled })); }
   else if (event.key.toLowerCase() === 'f' || event.key === 'F11') { event.preventDefault(); window.nativePlayer.fullscreen(); }
 });
 
@@ -157,7 +248,9 @@ window.nativePlayer.onNotice((text) => {
   notice.textContent = text; notice.hidden = false; showControls();
   setTimeout(() => { notice.hidden = true; }, 3200);
 });
+window.nativePlayer.onWindowMode(renderWindowMode);
 window.nativePlayer.state().then((initial) => {
+  renderWindowMode({ miniPlayer: initial?.miniPlayer, miniPlayerPinned: initial?.miniPlayerPinned });
   render(initial || {});
   button('play')?.focus();
 }).catch((error) => render({ loading: false, error: error.message }));

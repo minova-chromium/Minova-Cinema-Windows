@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('minova', {
     start: (key, quality) => ipcRenderer.invoke('native-player:start', { key, quality }),
     stop: () => ipcRenderer.invoke('native-player:close'),
     onClosed: (callback) => ipcRenderer.on('native-player:closed', () => callback()),
+    onHandoffCompleted: (callback) => ipcRenderer.on('native-player:handoff-complete', (_event, payload) => callback(payload)),
   },
   updates: {
     getState: () => ipcRenderer.invoke('update:get-state'),
@@ -29,5 +30,12 @@ contextBridge.exposeInMainWorld('minova', {
     },
   },
   fullscreen: () => ipcRenderer.invoke('window:fullscreen'),
+  windowControls: {
+    minimize: () => ipcRenderer.invoke('window:minimize'),
+    toggleMaximize: () => ipcRenderer.invoke('window:maximize-toggle'),
+    close: () => ipcRenderer.invoke('window:close'),
+    state: () => ipcRenderer.invoke('window:state'),
+    onState: (callback) => ipcRenderer.on('window:state', (_event, state) => callback(state)),
+  },
   openExternal: (url) => ipcRenderer.invoke('external:open', url),
 });

@@ -1,6 +1,6 @@
 const { randomUUID } = require('node:crypto');
 
-const PRODUCT_VERSION = '1.0.0';
+const PRODUCT_VERSION = '1.0.2';
 const CLIENT_ID = 'MinovaCinemaDesktop';
 const PAGE_SIZE = 200;
 const TRUSTED_ARTWORK_DOMAINS = ['plex.tv', 'themoviedb.org', 'tmdb.org', 'thetvdb.com', 'fanart.tv'];
@@ -50,6 +50,23 @@ function plexHeaders(token, extra = {}) {
     'X-Plex-Language': 'en',
     ...extra,
   };
+}
+
+function connectionErrorMessage(error, target) {
+  const code = error?.code || error?.cause?.code || '';
+  const host = target.hostname;
+  if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') {
+    const tailscale = host.endsWith('.ts.net') ? ' Start Tailscale on this PC and wait until it shows Connected.' : '';
+    return `Windows could not resolve ${host}.${tailscale} Check the server name and your DNS connection.`;
+  }
+  if (code === 'ECONNREFUSED') return `The connection to ${target.origin} was refused. Check that Plex Media Server is running and the port is correct.`;
+  if (['CERT_HAS_EXPIRED', 'DEPTH_ZERO_SELF_SIGNED_CERT', 'ERR_TLS_CERT_ALTNAME_INVALID', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE'].includes(code)) {
+    return `Windows rejected the HTTPS certificate from ${target.origin}. Check the certificate and server name.`;
+  }
+  if (error?.name === 'TimeoutError' || code === 'ETIMEDOUT' || code === 'UND_ERR_CONNECT_TIMEOUT') {
+    return `The connection to ${target.origin} timed out. Check that Plex is running and that its VPN or Tailscale connection is active.`;
+  }
+  return `The server at ${target.origin} could not be reached. Check that it opens on this PC and that its VPN or Tailscale connection is active.`;
 }
 
 function metadataList(payload) {
@@ -161,8 +178,7 @@ class PlexClient {
       response = await fetch(url, { method, headers: plexHeaders(this.token, extraHeaders), signal: AbortSignal.timeout(45000) });
     } catch (error) {
       const target = new URL(url);
-      const reason = error?.name === 'TimeoutError' ? 'The connection timed out.' : 'The server could not be reached.';
-      throw new Error(`${reason} Check that ${target.origin} opens on this PC and that its VPN or Tailscale connection is active.`);
+      throw new Error(connectionErrorMessage(error, target));
     }
     if (!response.ok) throw new Error(`Plex returned ${response.status} ${response.statusText}.`);
     if (response.status === 204) return {};
@@ -302,4 +318,4 @@ function rewritePlaylist(text, sourceUrl, wrap) {
   }).join('\n');
 }
 
-module.exports = { PlexClient, CLIENT_ID, isPlexOwnedHost, isTrustedExternalArtworkUrl, mapMetadata, normalizeServer, plexHeaders, rewritePlaylist };
+module.exports = { PlexClient, CLIENT_ID, connectionErrorMessage, isPlexOwnedHost, isTrustedExternalArtworkUrl, mapMetadata, normalizeServer, plexHeaders, rewritePlaylist };

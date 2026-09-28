@@ -19,6 +19,7 @@ const state = {
   syncing: false,
   update: { status: 'idle', currentVersion: '', availableVersion: null, progress: 0, message: 'Automatic update checks are enabled.' },
 };
+let dismissedUpdateVersion = null;
 
 const tabs = [
   ['home', 'Home'], ['movies', 'Movies'], ['series', 'Series'],
@@ -50,6 +51,16 @@ function formatTime(ms) {
   return minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60 ? `${minutes % 60}m` : ''}`.trim() : `${minutes} min`;
 }
 
+function formatClock(secondsValue) {
+  const seconds = Math.max(0, Math.floor(Number(secondsValue) || 0));
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainder = seconds % 60;
+  return hours
+    ? `${hours}:${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`
+    : `${minutes}:${String(remainder).padStart(2, '0')}`;
+}
+
 function metadata(item) {
   return [item?.year, item?.contentRating, item?.durationMs ? formatTime(item.durationMs) : null].filter(Boolean).join('  •  ');
 }
@@ -78,6 +89,40 @@ function updateButtonLabel() {
   return 'Check for updates';
 }
 
+function refreshUpdateDialog() {
+  const dialog = document.getElementById('update-dialog');
+  if (!dialog) return;
+  const status = state.update || {};
+  const shouldShow = ['available', 'downloading', 'downloaded'].includes(status.status)
+    && (status.status === 'downloading' || status.availableVersion !== dismissedUpdateVersion);
+  const wasHidden = dialog.hidden;
+  dialog.hidden = !shouldShow;
+  if (!shouldShow) return;
+  const title = document.getElementById('update-dialog-title');
+  const message = document.getElementById('update-dialog-message');
+  const version = document.getElementById('update-dialog-version');
+  const progress = dialog.querySelector('.update-dialog-progress');
+  const progressBar = progress.querySelector('span');
+  const dismiss = dialog.querySelector('[data-action="dismiss-update"]');
+  const install = dialog.querySelector('[data-action="install-update"]');
+  if (status.status === 'available') {
+    title.textContent = 'A new version is available';
+    message.textContent = 'Update directly from the official Minova Cinema GitHub release. Your Plex connection and preferences stay in place.';
+    install.textContent = 'Update'; install.disabled = false; dismiss.hidden = false; progress.hidden = true;
+  } else if (status.status === 'downloading') {
+    title.textContent = 'Updating Minova Cinema';
+    message.textContent = 'The update is downloading securely. The app will restart automatically when it is ready.';
+    install.textContent = `Downloading ${status.progress || 0}%`; install.disabled = true; dismiss.hidden = true; progress.hidden = false;
+    progressBar.style.width = `${status.progress || 0}%`;
+  } else {
+    title.textContent = 'Update ready to install';
+    message.textContent = 'Restart Minova Cinema to finish installing the update.';
+    install.textContent = 'Update & restart'; install.disabled = false; dismiss.hidden = false; progress.hidden = true;
+  }
+  version.textContent = `Version ${status.availableVersion || '—'} · currently ${status.currentVersion || '—'}`;
+  if (wasHidden) setTimeout(() => install.focus(), 0);
+}
+
 function refreshUpdateCard() {
   const card = document.querySelector('.update-card');
   if (!card) return;
@@ -96,7 +141,10 @@ function refreshUpdateCard() {
     check.textContent = updateButtonLabel();
     check.disabled = ['checking', 'downloading'].includes(status.status);
   }
-  if (install) install.hidden = status.status !== 'downloaded';
+  if (install) {
+    install.hidden = !['available', 'downloaded'].includes(status.status);
+    install.textContent = status.status === 'available' ? 'Update now' : 'Install and restart';
+  }
 }
 
 function logoMarkup(size = 'full') {
@@ -234,11 +282,12 @@ function browsePage() {
 }
 
 function onboarding() {
+  const remembered = Boolean(state.config?.connected);
   return `<div class="screen onboarding"><form id="connect-form" class="connect-card">${logoMarkup()}
     <h1>Connect your Plex library</h1>
     <p>Enter your Plex server and token once. Minova Cinema remembers them securely on this PC and reconnects automatically every time you open the app.</p>
     <label class="field"><span>Plex server</span><input id="server" value="${esc(state.config?.server || '')}" placeholder="192.168.1.10:32400" autocomplete="url" required autofocus></label>
-    <label class="field"><span>X-Plex-Token</span><span class="token-row"><input id="token" type="password" placeholder="Paste your Plex token" autocomplete="off" required><button class="secondary token-toggle" type="button" data-action="toggle-token" aria-label="Show Plex token">Show</button></span></label>
+    <label class="field"><span>X-Plex-Token</span><span class="token-row"><input id="token" type="password" placeholder="${remembered ? 'Saved securely — leave blank to reuse it' : 'Paste your Plex token'}" autocomplete="off" ${remembered ? '' : 'required'}><button class="secondary token-toggle" type="button" data-action="toggle-token" aria-label="Show Plex token">Show</button></span></label>
     ${state.error ? `<p class="error">${esc(state.error)}</p>` : ''}
     <div class="connect-footer"><span class="connection-note">Windows encrypted &nbsp;•&nbsp; Auto reconnect &nbsp;•&nbsp; Direct Play</span><button class="primary connect-button" type="submit">Connect & remember</button></div>
   </form></div>`;
@@ -291,7 +340,7 @@ function detailPage(item, children = []) {
   const inWatchlist = state.catalog.watchlist.some((entry) => entry.ratingKey === item.ratingKey);
   const bg = item.backdropPath || item.posterPath;
   return `<div class="screen detail-page">
-    ${bg ? `<div class="detail-bg" style="background-image:url('${art(bg)}')"></div>` : '<div class="detail-bg"></div>'}
+    <div class="detail-bg">${bg ? `<img src="${art(bg)}" alt="" aria-hidden="true">` : ''}</div>
     <button class="back-button" data-action="back" aria-label="Back">←</button>
     <section class="detail-copy">
       <div class="eyebrow">${esc(item.kind === 'show' ? 'Series' : item.kind === 'episode' ? item.secondaryTitle || 'Episode' : 'Movie')}</div>
@@ -323,15 +372,16 @@ function playerPage(payload) {
 }
 
 function render() {
-  if (!state.config) { appRoot.innerHTML = loading('Starting Minova Cinema…'); return; }
-  if (!state.config.connected && !state.config.demoMode) { appRoot.innerHTML = onboarding(); bindPage(); return; }
-  if (state.loading) { appRoot.innerHTML = loading(); return; }
+  if (!state.config) { appRoot.innerHTML = loading('Starting Minova Cinema…'); refreshUpdateDialog(); return; }
+  if (!state.config.connected && !state.config.demoMode) { appRoot.innerHTML = onboarding(); bindPage(); refreshUpdateDialog(); return; }
+  if (state.loading) { appRoot.innerHTML = loading(); refreshUpdateDialog(); return; }
   if (state.route.type === 'settings') appRoot.innerHTML = settingsPage();
   else if (state.route.type === 'detail') appRoot.innerHTML = detailPage(state.route.item, state.route.children || []);
   else if (state.route.type === 'collection') appRoot.innerHTML = collectionDetailPage(state.route.collection, state.route.members);
   else if (state.route.type === 'player') appRoot.innerHTML = playerPage(state.route.payload);
   else appRoot.innerHTML = browsePage();
   bindPage();
+  refreshUpdateDialog();
 }
 
 function bindPage() {
@@ -568,8 +618,11 @@ async function loadCatalog() {
     state.loading = false; state.error = null; state.route = { type: 'browse' };
     if (['movies', 'grid-click'].includes(state.config.captureView)) state.tab = 'movies';
     else if (state.config.captureView === 'collections') state.tab = 'collections';
-    else if (state.config.captureView === 'settings') state.route = { type: 'settings' };
+    else if (['settings', 'update-dialog'].includes(state.config.captureView)) state.route = { type: 'settings' };
     else if (state.config.captureView === 'detail') state.route = { type: 'detail', item: state.catalog.movies[0] || state.catalog.shows[0], children: [] };
+    if (state.config.demoMode && state.config.captureView === 'update-dialog') {
+      state.update = { status: 'available', currentVersion: '1.0.2', availableVersion: '1.0.3', progress: 0, message: 'Minova Cinema 1.0.3 is available.' };
+    }
     render();
   } catch (error) {
     state.loading = false; state.error = errorMessage(error);
@@ -667,8 +720,17 @@ document.addEventListener('click', async (event) => {
     } catch (error) { showToast(errorMessage(error)); }
   }
   else if (action === 'install-update') {
-    try { await window.minova.updates.install(); }
+    dismissedUpdateVersion = null;
+    try {
+      const update = await window.minova.updates.install();
+      if (update) state.update = update;
+      refreshUpdateCard(); refreshUpdateDialog();
+    }
     catch (error) { showToast(errorMessage(error)); }
+  }
+  else if (action === 'dismiss-update') {
+    dismissedUpdateVersion = state.update?.availableVersion || null;
+    refreshUpdateDialog();
   }
   else if (action === 'toggle-token') {
     const token = document.getElementById('token');
@@ -714,6 +776,16 @@ function focusSpatial(direction) {
 }
 
 document.addEventListener('keydown', (event) => {
+  const updateDialog = document.getElementById('update-dialog');
+  if (updateDialog && !updateDialog.hidden) {
+    const controls = [...updateDialog.querySelectorAll('button:not([hidden]):not([disabled])')];
+    const index = controls.indexOf(document.activeElement);
+    if (event.key === 'Escape' || event.key === 'Backspace') {
+      event.preventDefault(); updateDialog.querySelector('[data-action="dismiss-update"]:not([hidden])')?.click(); return;
+    }
+    if (['ArrowLeft', 'ArrowUp'].includes(event.key)) { event.preventDefault(); controls[Math.max(0, index - 1)]?.focus(); return; }
+    if (['ArrowRight', 'ArrowDown'].includes(event.key)) { event.preventDefault(); controls[Math.min(controls.length - 1, Math.max(0, index + 1))]?.focus(); return; }
+  }
   if (event.key === 'F11') { event.preventDefault(); window.minova.fullscreen(); return; }
   if ((event.key === 'Escape' || event.key === 'Backspace') && !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) {
     if (state.route.type !== 'browse') { event.preventDefault(); goBack(); }
@@ -722,16 +794,42 @@ document.addEventListener('keydown', (event) => {
   if (event.key.startsWith('Arrow') && navigateDpad(event.key)) event.preventDefault();
 });
 
+function renderWindowState(windowState = {}) {
+  const maximize = document.querySelector('[data-window-action="maximize"]');
+  maximize?.classList.toggle('is-maximized', Boolean(windowState.maximized));
+  maximize?.setAttribute('aria-label', windowState.maximized ? 'Restore window' : 'Maximize');
+  document.body.classList.toggle('fullscreen', Boolean(windowState.fullScreen));
+}
+
+document.addEventListener('click', (event) => {
+  const control = event.target.closest('[data-window-action]');
+  if (!control) return;
+  const action = control.dataset.windowAction;
+  if (action === 'minimize') window.minova.windowControls.minimize();
+  else if (action === 'maximize') window.minova.windowControls.toggleMaximize().then((maximized) => renderWindowState({ maximized }));
+  else if (action === 'close') window.minova.windowControls.close();
+});
+
+window.minova.windowControls.onState(renderWindowState);
+window.minova.windowControls.state().then(renderWindowState);
+
 window.minova.nativePlayer.onClosed(() => {
   if (state.route.type !== 'player') return;
   state.route = state.routeStack.pop() || { type: 'browse' };
   render();
 });
 
+window.minova.nativePlayer.onHandoffCompleted((payload) => {
+  const position = Math.max(0, Number(payload?.position) || 0);
+  showToast(`Position saved at ${formatClock(position)}. Continue from Plex on your other device.`);
+  syncCatalog(null, { silent: true }).then(() => render());
+});
+
 window.minova.updates.onState((update) => {
   const previousStatus = state.update?.status;
   state.update = update;
   refreshUpdateCard();
+  refreshUpdateDialog();
   if (update.status === 'downloaded' && previousStatus !== 'downloaded') {
     showToast(`Minova Cinema ${update.availableVersion} is ready to install.`);
   }
@@ -756,6 +854,7 @@ window.__runMinovaQa = async function runMinovaQa() {
   const activeLabel = () => document.activeElement?.getAttribute('aria-label') || document.activeElement?.textContent?.trim() || document.activeElement?.id || '';
 
   await wait(120);
+  check('Custom Minova title bar exposes all three window controls', document.querySelectorAll('.window-controls [data-window-action]').length === 3, document.querySelectorAll('.window-controls [data-window-action]').length);
   check('Initial D-pad focus lands on selected Home tab', document.activeElement?.dataset?.tab === 'home', activeLabel());
   await press('ArrowRight');
   check('Right moves Home to Movies', document.activeElement?.dataset?.tab === 'movies', activeLabel());
@@ -779,7 +878,10 @@ window.__runMinovaQa = async function runMinovaQa() {
   document.activeElement.click(); await wait(180);
   check('Grid card opens details', state.route.type === 'detail' && Boolean(document.querySelector('.detail-copy')), state.route.type);
   check('Details receives an action focus target', Boolean(document.activeElement?.closest('.detail-copy .actions')), activeLabel());
+  check('Details reserves a cinematic artwork layer', Boolean(document.querySelector('.detail-bg')), document.querySelector('.detail-bg')?.className);
   check('Movie Cast & Crew uses actor portrait cards', Boolean(document.querySelector('.credit-card .credit-avatar img')), document.querySelectorAll('.credit-card .credit-avatar img').length);
+  const firstCreditRole = document.querySelector('.credit-card .credit-role');
+  check('Cast names and roles stay visible without initial scrolling', Boolean(firstCreditRole) && firstCreditRole.getBoundingClientRect().bottom <= innerHeight, firstCreditRole?.getBoundingClientRect().bottom);
   await press('ArrowRight');
   check('Right moves across detail actions', Boolean(document.activeElement?.closest('.detail-copy .actions')), activeLabel());
   await press('Backspace');
@@ -833,6 +935,15 @@ window.__runMinovaQa = async function runMinovaQa() {
   check('Settings receives focus on its header control', document.activeElement?.dataset?.action === 'settings', activeLabel());
   check('Settings includes the five-card dashboard with automatic updates', document.querySelectorAll('.settings-grid .settings-card').length === 5 && Boolean(document.querySelector('[data-action="check-update"]')), document.querySelectorAll('.settings-grid .settings-card').length);
   check('Settings dashboard uses two columns', getComputedStyle(document.querySelector('.settings-grid')).gridTemplateColumns.split(' ').length === 2, getComputedStyle(document.querySelector('.settings-grid')).gridTemplateColumns);
+  const previousUpdate = state.update;
+  dismissedUpdateVersion = null;
+  state.update = { status: 'available', currentVersion: '1.0.2', availableVersion: '1.0.3', progress: 0, message: 'Minova Cinema 1.0.3 is available.' };
+  refreshUpdateDialog();
+  check('GitHub update opens the branded in-app dialog', !document.getElementById('update-dialog').hidden, document.getElementById('update-dialog-title').textContent);
+  check('Update dialog offers Update and Not now', Boolean(document.querySelector('#update-dialog [data-action="install-update"]')) && Boolean(document.querySelector('#update-dialog [data-action="dismiss-update"]')), document.querySelector('.update-dialog-actions')?.textContent.trim());
+  document.querySelector('#update-dialog [data-action="dismiss-update"]')?.click(); await wait();
+  check('Not now dismisses the update without leaving Settings', document.getElementById('update-dialog').hidden && state.route.type === 'settings', state.route.type);
+  state.update = previousUpdate; dismissedUpdateVersion = null; refreshUpdateDialog(); refreshUpdateCard();
   await press('ArrowDown');
   check('Down enters playback quality', document.activeElement?.id === 'quality', activeLabel());
   const previousQuality = document.activeElement?.value;
@@ -899,8 +1010,8 @@ window.__runMinovaPersistenceCheck = async function runMinovaPersistenceCheck() 
 };
 
 window.addEventListener('focus', () => {
-  if (state.config?.connected && state.catalog && Date.now() - state.catalogSyncedAt > 300000) {
-    syncCatalog(null, { silent: true });
+  if (state.config?.connected && state.catalog && Date.now() - state.catalogSyncedAt > 15000) {
+    syncCatalog(null, { silent: true }).then((changed) => { if (changed) render(); });
   }
 });
 

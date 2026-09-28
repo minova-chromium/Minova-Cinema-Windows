@@ -1,9 +1,11 @@
-const { app, BrowserWindow, desktopCapturer, ipcMain, nativeImage, protocol, safeStorage, shell } = require('electron');
+const { app, BrowserWindow, desktopCapturer, ipcMain, nativeImage, protocol, safeStorage, screen, shell } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const { autoUpdater } = require('electron-updater');
 const { PlexClient, isPlexOwnedHost, isTrustedExternalArtworkUrl, normalizeServer, plexHeaders, rewritePlaylist } = require('./plex.cjs');
 const { NativeMpvPlayer, mediaUrl } = require('./native-player.cjs');
+const { migrateLegacySettings, readSettings, selectConnectionToken, writeSettings } = require('./settings.cjs');
+const { miniPlayerBounds } = require('./window-modes.cjs');
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'minova-plex', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true } }]);
 
@@ -11,8 +13,11 @@ let mainWindow;
 let playerOverlay;
 let nativePlayer;
 let closingPlayerOverlay = false;
+let miniPlayerRestoreState = null;
+let miniPlayerPinned = false;
 let activeClient;
 let updateTimer;
+let updateAccepted = false;
 let updateState = {
   status: 'idle', currentVersion: app.getVersion(), availableVersion: null,
   progress: 0, message: 'Automatic update checks are enabled.',
@@ -39,13 +44,17 @@ if (qaProfileArgument) {
 
 function configPath() { return path.join(app.getPath('userData'), 'settings.json'); }
 
-function readStored() {
-  try { return JSON.parse(fs.readFileSync(configPath(), 'utf8')); } catch { return {}; }
-}
+function readStored() { return readSettings(configPath()); }
 
-function writeStored(settings) {
-  fs.mkdirSync(path.dirname(configPath()), { recursive: true });
-  fs.writeFileSync(configPath(), JSON.stringify(settings, null, 2), 'utf8');
+function writeStored(settings) { writeSettings(configPath(), settings); }
+
+function migratePreviousDesktopProfile() {
+  if (demoMode || qaProfileArgument) return { migrated: false };
+  const appData = app.getPath('appData');
+  return migrateLegacySettings(configPath(), [
+    path.join(appData, 'minova-cinema-desktop', 'settings.json'),
+    path.join(appData, 'Minova Cinema Desktop', 'settings.json'),
+  ]);
 }
 
 function publishUpdateState(patch = {}) {
@@ -60,7 +69,7 @@ async function checkForAppUpdates() {
   if (!app.isPackaged || demoMode || qaMode) {
     return publishUpdateState({ status: 'disabled', message: 'Update checks run in installed production builds.' });
   }
-  if (['checking', 'downloading'].includes(updateState.status)) return updateState;
+  if (['checking', 'available', 'downloading', 'downloaded'].includes(updateState.status)) return updateState;
   publishUpdateState({ status: 'checking', progress: 0, message: 'Checking GitHub for updates…' });
   try {
     await autoUpdater.checkForUpdates();
@@ -75,14 +84,17 @@ function setupAutoUpdater() {
     publishUpdateState({ status: 'disabled', message: 'Update checks run in installed production builds.' });
     return;
   }
-  autoUpdater.autoDownload = true;
+  autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.allowPrerelease = false;
   autoUpdater.on('checking-for-update', () => publishUpdateState({ status: 'checking', progress: 0, message: 'Checking GitHub for updates…' }));
-  autoUpdater.on('update-available', (info) => publishUpdateState({
-    status: 'downloading', availableVersion: info.version, progress: 0,
-    message: `Downloading Minova Cinema ${info.version}…`,
-  }));
+  autoUpdater.on('update-available', (info) => {
+    updateAccepted = false;
+    publishUpdateState({
+      status: 'available', availableVersion: info.version, progress: 0,
+      message: `Minova Cinema ${info.version} is available.`,
+    });
+  });
   autoUpdater.on('download-progress', (progress) => publishUpdateState({
     status: 'downloading', progress: Math.max(0, Math.min(100, Math.round(progress.percent || 0))),
     message: `Downloading update… ${Math.round(progress.percent || 0)}%`,
@@ -91,16 +103,37 @@ function setupAutoUpdater() {
     status: 'up-to-date', availableVersion: null, progress: 0,
     message: `Minova Cinema ${app.getVersion()} is up to date.`,
   }));
-  autoUpdater.on('update-downloaded', (info) => publishUpdateState({
-    status: 'downloaded', availableVersion: info.version, progress: 100,
-    message: `Minova Cinema ${info.version} is ready to install.`,
-  }));
+  autoUpdater.on('update-downloaded', (info) => {
+    publishUpdateState({
+      status: 'downloaded', availableVersion: info.version, progress: 100,
+      message: updateAccepted ? `Installing Minova Cinema ${info.version}…` : `Minova Cinema ${info.version} is ready to install.`,
+    });
+    if (updateAccepted) setTimeout(() => autoUpdater.quitAndInstall(false, true), 900);
+  });
   autoUpdater.on('error', () => publishUpdateState({
     status: 'error', progress: 0, message: 'The update service could not be reached. Try again later.',
   }));
   setTimeout(() => checkForAppUpdates(), 5000);
   updateTimer = setInterval(() => checkForAppUpdates(), 6 * 60 * 60 * 1000);
   updateTimer.unref?.();
+}
+
+async function acceptAppUpdate() {
+  if (!app.isPackaged || demoMode || qaMode) throw new Error('Updates can only be installed from a production build.');
+  if (updateState.status === 'available') {
+    updateAccepted = true;
+    publishUpdateState({ status: 'downloading', progress: 0, message: `Downloading Minova Cinema ${updateState.availableVersion}…` });
+    await autoUpdater.downloadUpdate();
+    return updateState;
+  }
+  if (updateState.status === 'downloaded') {
+    updateAccepted = true;
+    publishUpdateState({ message: `Installing Minova Cinema ${updateState.availableVersion}…` });
+    setImmediate(() => autoUpdater.quitAndInstall(false, true));
+    return updateState;
+  }
+  if (updateState.status === 'downloading') return updateState;
+  throw new Error('No update is ready to install.');
 }
 
 function removeObsoleteStandalonePlayer() {
@@ -219,11 +252,7 @@ async function installMediaProtocol() {
 function registerIpc() {
   ipcMain.handle('update:get-state', () => updateState);
   ipcMain.handle('update:check', () => checkForAppUpdates());
-  ipcMain.handle('update:install', () => {
-    if (updateState.status !== 'downloaded') throw new Error('No downloaded update is ready to install.');
-    setImmediate(() => autoUpdater.quitAndInstall(false, true));
-    return true;
-  });
+  ipcMain.handle('update:install', () => acceptAppUpdate());
   ipcMain.handle('config:get', () => {
     const connection = getConnection();
     const stored = readStored();
@@ -234,9 +263,12 @@ function registerIpc() {
     };
   });
   ipcMain.handle('config:connect', async (_event, { server, token }) => {
-    const candidate = new PlexClient(server, token);
+    const remembered = getConnection();
+    const effectiveToken = selectConnectionToken(token, remembered?.token);
+    if (!effectiveToken) throw new Error('Enter your Plex token.');
+    const candidate = new PlexClient(server, effectiveToken);
     const serverName = await candidate.test();
-    const normalized = saveConnection(server, token, readStored().quality || 'original');
+    const normalized = saveConnection(server, effectiveToken, readStored().quality || 'original');
     return { server: normalized, serverName };
   });
   ipcMain.handle('config:save-preferences', (_event, preferences) => {
@@ -277,10 +309,132 @@ function registerIpc() {
     }
     return state;
   });
-  ipcMain.handle('native-player:state', () => nativePlayer?.snapshot() || null);
+  ipcMain.handle('native-player:state', () => ({
+    ...(nativePlayer?.snapshot() || {}),
+    miniPlayer: Boolean(miniPlayerRestoreState),
+    miniPlayerPinned,
+  }));
+  ipcMain.handle('native-player:handoff', async () => {
+    const player = nativePlayer;
+    if (!player) throw new Error('The native player is not active.');
+    const state = await player.handoff();
+    await closeNativePlayback(true);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('native-player:handoff-complete', {
+        position: state.position,
+        title: state.title,
+      });
+    }
+    return true;
+  });
   ipcMain.handle('native-player:close', () => closeNativePlayback(true));
-  ipcMain.handle('window:fullscreen', () => { mainWindow?.setFullScreen(!mainWindow.isFullScreen()); return mainWindow?.isFullScreen(); });
+  ipcMain.handle('window:mini-player', (_event, enabled) => setMiniPlayer(Boolean(enabled)));
+  ipcMain.handle('window:mini-player-pin', (_event, enabled) => setMiniPlayerPinned(Boolean(enabled)));
+  ipcMain.handle('window:mini-player-state', () => windowModeState());
+  ipcMain.handle('window:mini-player-resize', (_event, size) => resizeMiniPlayer(size));
+  ipcMain.handle('window:mini-player-move', (_event, position) => moveMiniPlayer(position));
+  ipcMain.handle('window:fullscreen', async () => {
+    if (!mainWindow) return false;
+    if (miniPlayerRestoreState) await setMiniPlayer(false);
+    mainWindow.setFullScreen(!mainWindow.isFullScreen());
+    return mainWindow.isFullScreen();
+  });
+  ipcMain.handle('window:minimize', () => { mainWindow?.minimize(); return true; });
+  ipcMain.handle('window:maximize-toggle', () => {
+    if (!mainWindow) return false;
+    if (mainWindow.isMaximized()) mainWindow.unmaximize(); else mainWindow.maximize();
+    return mainWindow.isMaximized();
+  });
+  ipcMain.handle('window:close', () => { mainWindow?.close(); return true; });
+  ipcMain.handle('window:state', () => ({ maximized: Boolean(mainWindow?.isMaximized()), fullScreen: Boolean(mainWindow?.isFullScreen()) }));
   ipcMain.handle('external:open', (_event, url) => /^https:\/\//i.test(url) && shell.openExternal(url));
+}
+
+function publishWindowMode() {
+  if (playerOverlay && !playerOverlay.isDestroyed() && !playerOverlay.webContents.isDestroyed()) {
+    playerOverlay.webContents.send('native-player:window-mode', windowModeState());
+  }
+}
+
+function windowModeState() {
+  return {
+    miniPlayer: Boolean(miniPlayerRestoreState),
+    miniPlayerPinned,
+    bounds: mainWindow && !mainWindow.isDestroyed() ? mainWindow.getBounds() : null,
+  };
+}
+
+function setMiniPlayerPinned(enabled) {
+  if (!mainWindow || mainWindow.isDestroyed() || !miniPlayerRestoreState) return false;
+  miniPlayerPinned = enabled;
+  mainWindow.setVisibleOnAllWorkspaces(enabled, { visibleOnFullScreen: enabled });
+  mainWindow.setAlwaysOnTop(enabled, process.platform === 'win32' ? 'pop-up-menu' : 'floating');
+  publishWindowMode();
+  return miniPlayerPinned;
+}
+
+function resizeMiniPlayer(size = {}) {
+  if (!mainWindow || mainWindow.isDestroyed() || !miniPlayerRestoreState) return windowModeState();
+  const current = mainWindow.getBounds();
+  const display = screen.getDisplayMatching(current);
+  const width = Math.round(Math.max(360, Math.min(Number(size.width) || current.width, display.workArea.width)));
+  const height = Math.round(Math.max(220, Math.min(Number(size.height) || current.height, display.workArea.height)));
+  mainWindow.setBounds({ ...current, width, height }, false);
+  syncPlayerOverlay();
+  return windowModeState();
+}
+
+function moveMiniPlayer(position = {}) {
+  if (!mainWindow || mainWindow.isDestroyed() || !miniPlayerRestoreState) return windowModeState();
+  const current = mainWindow.getBounds();
+  const requested = {
+    x: Math.round(Number(position.x) || current.x),
+    y: Math.round(Number(position.y) || current.y),
+  };
+  const display = screen.getDisplayNearestPoint({ x: requested.x + Math.round(current.width / 2), y: requested.y + 30 });
+  const x = Math.max(display.workArea.x, Math.min(requested.x, display.workArea.x + display.workArea.width - current.width));
+  const y = Math.max(display.workArea.y, Math.min(requested.y, display.workArea.y + display.workArea.height - current.height));
+  mainWindow.setBounds({ ...current, x, y }, false);
+  syncPlayerOverlay();
+  return windowModeState();
+}
+
+async function setMiniPlayer(enabled) {
+  if (!mainWindow || mainWindow.isDestroyed()) return false;
+  if (enabled === Boolean(miniPlayerRestoreState)) return enabled;
+  if (enabled) {
+    if (!nativePlayer) return false;
+    miniPlayerRestoreState = {
+      bounds: mainWindow.getNormalBounds(),
+      maximized: mainWindow.isMaximized(),
+      fullScreen: mainWindow.isFullScreen(),
+      alwaysOnTop: mainWindow.isAlwaysOnTop(),
+      resizable: mainWindow.isResizable(),
+    };
+    if (mainWindow.isFullScreen()) mainWindow.setFullScreen(false);
+    if (mainWindow.isMaximized()) mainWindow.unmaximize();
+    mainWindow.setMinimumSize(360, 220);
+    mainWindow.setResizable(true);
+    const display = screen.getDisplayMatching(mainWindow.getBounds());
+    mainWindow.setBounds(miniPlayerBounds(display.workArea), true);
+    mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    miniPlayerPinned = true;
+    mainWindow.setAlwaysOnTop(true, process.platform === 'win32' ? 'pop-up-menu' : 'floating');
+  } else {
+    const restore = miniPlayerRestoreState;
+    miniPlayerRestoreState = null;
+    mainWindow.setVisibleOnAllWorkspaces(false);
+    mainWindow.setAlwaysOnTop(restore.alwaysOnTop);
+    mainWindow.setMinimumSize(1100, 650);
+    mainWindow.setResizable(restore.resizable);
+    mainWindow.setBounds(restore.bounds, true);
+    if (restore.maximized) mainWindow.maximize();
+    if (restore.fullScreen) mainWindow.setFullScreen(true);
+    miniPlayerPinned = false;
+  }
+  publishWindowMode();
+  setImmediate(syncPlayerOverlay);
+  return Boolean(miniPlayerRestoreState);
 }
 
 function syncPlayerOverlay() {
@@ -321,7 +475,7 @@ function createPlayerOverlay() {
   });
   playerOverlay.removeMenu();
   playerOverlay.loadFile(path.join(__dirname, 'player-overlay.html'));
-  playerOverlay.once('ready-to-show', () => { syncPlayerOverlay(); playerOverlay.focus(); });
+  playerOverlay.once('ready-to-show', () => { syncPlayerOverlay(); publishWindowMode(); playerOverlay.focus(); });
   playerOverlay.on('close', (event) => {
     if (closingPlayerOverlay || !nativePlayer) return;
     event.preventDefault();
@@ -366,6 +520,7 @@ async function startNativePlayback(key, quality = 'original') {
 }
 
 async function closeNativePlayback(notifyRenderer) {
+  if (miniPlayerRestoreState && mainWindow && !mainWindow.isDestroyed()) await setMiniPlayer(false);
   const player = nativePlayer;
   nativePlayer = null;
   if (player) await player.close().catch(() => {});
@@ -384,7 +539,7 @@ function createWindow() {
     width: 1600, height: 900, minWidth: 1100, minHeight: 650, show: false,
     backgroundColor: '#080c12', title: 'Minova Cinema',
     icon: path.join(__dirname, '..', 'assets', 'minova-cinema.ico'),
-    titleBarStyle: 'hidden', titleBarOverlay: { color: '#080c12', symbolColor: '#a7b5c5', height: 36 },
+    frame: false,
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
   mainWindow.removeMenu();
@@ -392,6 +547,11 @@ function createWindow() {
   mainWindow.once('ready-to-show', () => mainWindow.show());
   for (const event of ['move', 'resize', 'restore', 'maximize', 'unmaximize', 'enter-full-screen', 'leave-full-screen']) {
     mainWindow.on(event, () => setImmediate(syncPlayerOverlay));
+  }
+  for (const event of ['maximize', 'unmaximize', 'enter-full-screen', 'leave-full-screen']) {
+    mainWindow.on(event, () => mainWindow?.webContents.send('window:state', {
+      maximized: mainWindow.isMaximized(), fullScreen: mainWindow.isFullScreen(),
+    }));
   }
   mainWindow.on('minimize', syncPlayerOverlay);
   mainWindow.on('close', () => { closeNativePlayback(false).catch(() => {}); });
@@ -566,8 +726,42 @@ async function runNativePlayerQa() {
     await nativePlayer.execute('enhancement', 'high');
     await nativePlayer.execute('toggle-pause');
     const state = nativePlayer.snapshot();
+    const normalBounds = mainWindow.getNormalBounds();
+    const miniEnabled = await setMiniPlayer(true);
+    await new Promise((resolve) => setTimeout(resolve, 180));
+    const miniBounds = mainWindow.getBounds();
+    const miniAlwaysOnTop = mainWindow.isAlwaysOnTop();
+    const miniPlayerWindow = miniEnabled && miniAlwaysOnTop && mainWindow.isResizable()
+      && miniBounds.width <= 560 && miniBounds.height <= 340
+      && miniBounds.width >= 360 && miniBounds.height >= 220;
+    const miniPlayerUnpins = !setMiniPlayerPinned(false) && !mainWindow.isAlwaysOnTop();
+    const miniPlayerRepins = setMiniPlayerPinned(true) && mainWindow.isAlwaysOnTop();
+    resizeMiniPlayer({ width: 700, height: 440 });
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    const resizedMiniBounds = mainWindow.getBounds();
+    const miniPlayerResizes = resizedMiniBounds.width === 700 && resizedMiniBounds.height === 440;
+    const miniDisplay = screen.getDisplayMatching(resizedMiniBounds);
+    const moveTarget = { x: miniDisplay.workArea.x + 48, y: miniDisplay.workArea.y + 52 };
+    moveMiniPlayer(moveTarget);
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    const movedMiniBounds = mainWindow.getBounds();
+    const miniPlayerMoves = movedMiniBounds.x === moveTarget.x && movedMiniBounds.y === moveTarget.y;
+    const miniOverlayMatches = !overlay.isDestroyed()
+      && JSON.stringify(overlay.getBounds()) === JSON.stringify(mainWindow.getBounds());
+    let miniCapturePath = null;
+    if (nativeQaCaptureArgument && miniPlayerWindow && miniOverlayMatches) {
+      miniCapturePath = capturePath.replace(/(\.[^.]+)?$/, '-mini$1');
+      await overlay.webContents.executeJavaScript("document.getElementById('player-overlay')?.classList.remove('controls-hidden')");
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      await nativePlayer.captureComposedWindow(miniCapturePath);
+    }
+    const miniDisabled = !(await setMiniPlayer(false));
+    await new Promise((resolve) => setTimeout(resolve, 180));
+    const restoredBounds = mainWindow.getNormalBounds();
+    const miniPlayerRestores = miniDisabled && !mainWindow.isAlwaysOnTop()
+      && JSON.stringify(restoredBounds) === JSON.stringify(normalBounds);
     report = {
-      passed: state.ready && state.videoSurfaceReady && !separateVideoWindow && videoLumaRange > 18 && magentaRatio < 0.2 && state.paused && Math.abs(state.volume - 63) < 1 && state.enhancement === 'high' && state.enhancementActive,
+      passed: state.ready && state.videoSurfaceReady && !separateVideoWindow && videoLumaRange > 18 && magentaRatio < 0.2 && state.paused && Math.abs(state.volume - 63) < 1 && state.enhancement === 'high' && state.enhancementActive && miniPlayerWindow && miniPlayerUnpins && miniPlayerRepins && miniPlayerResizes && miniPlayerMoves && miniOverlayMatches && miniPlayerRestores,
       state,
       checks: {
         embeddedNativeProcess: Boolean(nativePlayer.process && !nativePlayer.process.killed),
@@ -582,6 +776,19 @@ async function runNativePlayerQa() {
         volumeControl: Math.abs(state.volume - 63) < 1,
         shaderMode: state.enhancement === 'high' && state.enhancementActive,
         trackDiscovery: Array.isArray(state.tracks),
+        miniPlayerWindow,
+        miniPlayerEnabled: miniEnabled,
+        miniPlayerAlwaysOnTop: miniAlwaysOnTop,
+        miniPlayerBounds: miniBounds,
+        miniPlayerUnpins,
+        miniPlayerRepins,
+        miniPlayerResizes,
+        resizedMiniBounds,
+        miniPlayerMoves,
+        movedMiniBounds,
+        miniOverlayMatches,
+        miniPlayerCapture: miniCapturePath,
+        miniPlayerRestores,
       },
     };
   } catch (error) {
@@ -594,6 +801,7 @@ async function runNativePlayerQa() {
 }
 
 app.whenReady().then(async () => {
+  migratePreviousDesktopProfile();
   removeObsoleteStandalonePlayer();
   await installMediaProtocol();
   registerIpc();

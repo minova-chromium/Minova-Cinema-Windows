@@ -8,8 +8,30 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="window-drag"></div>
+  <header class="window-titlebar" aria-label="Minova Cinema window controls">
+    <div class="window-drag"></div>
+    <div class="window-identity" aria-hidden="true"><img src="../assets/minova-symbol-color.svg" alt=""><span>MINOVA CINEMA</span></div>
+    <div class="window-controls">
+      <button type="button" data-window-action="minimize" aria-label="Minimize"><span class="minimize-glyph"></span></button>
+      <button type="button" data-window-action="maximize" aria-label="Maximize"><span class="maximize-glyph"></span></button>
+      <button type="button" class="window-close" data-window-action="close" aria-label="Close"><span class="close-glyph"></span></button>
+    </div>
+  </header>
   <main id="app" aria-live="polite"></main>
+  <section id="update-dialog" class="update-dialog" role="dialog" aria-modal="true" aria-labelledby="update-dialog-title" hidden>
+    <div class="update-dialog-card">
+      <div class="update-dialog-brand"><img src="../assets/minova-symbol-color.svg" alt=""><span>MINOVA CINEMA</span></div>
+      <span class="update-dialog-kicker">Application update</span>
+      <h2 id="update-dialog-title">A new version is ready</h2>
+      <p id="update-dialog-message">Minova Cinema can update automatically from the official GitHub release.</p>
+      <div class="update-dialog-progress" hidden><span></span></div>
+      <small id="update-dialog-version"></small>
+      <div class="update-dialog-actions">
+        <button type="button" class="secondary" data-action="dismiss-update">Not now</button>
+        <button type="button" class="primary" data-action="install-update">Update</button>
+      </div>
+    </div>
+  </section>
   <div id="toast" role="status"></div>
   <script src="app.js"></script>
 </body>

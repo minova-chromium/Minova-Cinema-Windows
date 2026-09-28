@@ -18,6 +18,9 @@ button { color: #f6fafc; }
 .spacer { flex: 1; }
 .icon-button, .small-button, .menu-button, .play-button { min-height: 40px; border: 1px solid #263a49; border-radius: 8px; background: rgba(14,26,36,.92); cursor: pointer; }
 .icon-button { min-width: 44px; padding: 8px 12px; }
+.icon-button svg { display: block; width: 18px; height: 18px; margin: auto; fill: currentColor; }
+.pin-button { display: none; }
+.pin-button.active { color: #031116; border-color: #91f8ff; background: #20d4e5; }
 .small-button { min-width: 62px; padding: 8px 12px; }
 .menu-button { max-width: 220px; padding: 8px 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .play-button { min-width: 51px; color: #031116; border-color: #91f8ff; background: #20d4e5; font-weight: 800; }
@@ -50,4 +53,45 @@ button:focus-visible, input:focus-visible { outline: 3px solid #21d9e9; outline-
   .control-row { gap: 5px; }
   .menu-button { max-width: 145px; padding-inline: 9px; }
   .volume { width: 70px; }
+}
+
+body.mini-player .player-header { min-height: 62px; gap: 10px; padding: 10px 14px 18px; }
+body.mini-player .player-header { cursor: move; touch-action: none; }
+body.mini-player .player-header button { cursor: pointer; }
+body.mini-player .player-header .status-badges,
+body.mini-player .title-block span { display: none; }
+body.mini-player .title-block strong { font-size: 14px; }
+body.mini-player .player-controls { min-height: 82px; padding: 11px 12px 9px; gap: 6px; }
+body.mini-player .control-row { gap: 5px; }
+body.mini-player .small-button { min-width: 48px; padding-inline: 7px; }
+body.mini-player .play-button { min-width: 45px; }
+body.mini-player #time { min-width: 88px; font-size: 11px; }
+body.mini-player .volume,
+body.mini-player .menu-button,
+body.mini-player [data-action="audio"],
+body.mini-player [data-action="subtitles"],
+body.mini-player [data-action="fullscreen"] { display: none; }
+body.mini-player .track-menu { display: none; }
+body.mini-player .notice { top: 68px; max-width: calc(100vw - 24px); font-size: 12px; }
+body.mini-player .pin-button { display: inline-flex; align-items: center; justify-content: center; }
+#resize-handle { display: none; }
+body.mini-player #resize-handle {
+  position: absolute;
+  z-index: 20;
+  right: 0;
+  bottom: 0;
+  display: block;
+  width: 22px;
+  height: 22px;
+  cursor: nwse-resize;
+}
+body.mini-player #resize-handle::after {
+  content: "";
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid rgba(145,248,255,.9);
+  border-bottom: 2px solid rgba(145,248,255,.9);
 }

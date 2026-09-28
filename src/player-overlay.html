@@ -32,11 +32,17 @@
         <input id="volume" class="volume" type="range" min="0" max="100" value="100" step="1" aria-label="Volume">
         <button class="menu-button" data-action="audio">Audio</button>
         <button class="menu-button" data-action="subtitles">Subtitles: Off</button>
+        <button class="menu-button accent-outline" data-action="handoff" title="Save this position to Plex and close the player">Continue elsewhere</button>
         <button class="menu-button" data-action="resync">Resync</button>
         <button class="menu-button accent-outline" data-action="enhancement">GPU Balanced</button>
+        <button class="icon-button pin-button" data-action="pin" aria-label="Unpin mini-player" aria-pressed="true" title="Unpin mini-player">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 9V4l1-1V2H7v1l1 1v5c0 1.66-1.34 3-3 3v2h5.97v7l1.03 1 1.03-1v-7H19v-2c-1.66 0-3-1.34-3-3Z"/></svg>
+        </button>
+        <button class="icon-button accent-outline" data-action="mini-player" aria-label="Pop out mini-player" title="Pop out mini-player">▣</button>
         <button class="icon-button accent-outline" data-action="fullscreen" aria-label="Fullscreen">⛶</button>
       </div>
     </footer>
+    <div id="resize-handle" role="separator" aria-label="Resize mini-player" title="Drag to resize"></div>
   </main>
   <script src="player-overlay.js"></script>
 </body>

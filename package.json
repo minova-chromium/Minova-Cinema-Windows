@@ -1,6 +1,6 @@
 {
   "name": "minova-cinema-desktop",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "description": "Minova Cinema for Windows",
   "repository": "https://github.com/minova-chromium/Minova-Cinema-Windows.git",
   "main": "src/main.cjs",
@@ -12,9 +12,10 @@
     "demo": "electron . --demo",
     "test": "node --test tests/*.test.cjs",
     "prepare:native-player": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Get-LibMpv.ps1 && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Build-LibMpvHost.ps1",
-    "prepack": "pnpm run prepare:native-player",
+    "prepare:installer-art": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Generate-InstallerArtwork.ps1",
+    "prepack": "pnpm run prepare:native-player && pnpm run prepare:installer-art",
     "pack": "electron-builder --dir --win",
-    "predist": "pnpm run prepare:native-player",
+    "predist": "pnpm run prepare:native-player && pnpm run prepare:installer-art",
     "dist": "electron-builder --win nsis --publish never"
   },
   "dependencies": {
@@ -70,6 +71,13 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
+      "installerIcon": "minova-cinema.ico",
+      "uninstallerIcon": "minova-cinema.ico",
+      "installerSidebar": "installer-sidebar.bmp",
+      "uninstallerSidebar": "installer-sidebar.bmp",
+      "installerHeader": "installer-header.bmp",
+      "installerLanguages": "en_US",
+      "displayLanguageSelector": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Minova Cinema"
