@@ -157,11 +157,11 @@ function placeholderArt() {
   return `<span class="placeholder-art"><img src="../assets/minova-symbol-color.svg" alt=""></span>`;
 }
 
-function card(item, { landscape = false, collection = false } = {}) {
+function card(item, { landscape = false, collection = false, alpha = null } = {}) {
   if (collection) return collectionCard(item);
   const imagePath = landscape ? item.backdropPath || item.posterPath : item.posterPath || item.backdropPath;
   const subtitle = item.progress > 0 ? timeLeft(item) : item.secondaryTitle || metadata(item);
-  return `<button class="media-card${landscape ? ' landscape' : ''}" data-action="open" data-key="${esc(item.ratingKey)}" data-focus-key="${esc(item.ratingKey)}" aria-label="${esc(item.title)}">
+  return `<button class="media-card${landscape ? ' landscape' : ''}" data-action="open" data-key="${esc(item.ratingKey)}" data-focus-key="${esc(item.ratingKey)}" ${alpha ? `data-alpha-start="${alpha}"` : ''} aria-label="${esc(item.title)}">
     ${imagePath ? `<img src="${art(imagePath)}" alt="" loading="lazy">` : placeholderArt()}
     ${item.isWatched ? '<span class="badge">✓</span>' : ''}
     <span class="card-overlay"><span class="card-title">${esc(item.title)}</span><span class="card-subtitle">${esc(subtitle)}</span></span>
@@ -211,24 +211,88 @@ function heroMarkup(item, index = 0, count = 0) {
 function shelf(title, items, landscape = false) {
   if (!items?.length) return '';
   const visibleItems = items.slice(0, 80);
-  return `<section class="section"><div class="section-heading"><h2 class="section-title">${esc(title)}</h2><span>${visibleItems.length} ${visibleItems.length === 1 ? 'title' : 'titles'}</span></div><div class="rail-shell">
+  return `<section class="section"><div class="section-heading"><div class="section-heading-copy"><h2 class="section-title">${esc(title)}</h2><span>${visibleItems.length} ${visibleItems.length === 1 ? 'title' : 'titles'}</span></div><div class="section-controls" aria-label="${esc(title)} shelf controls">
     <button class="rail-arrow rail-arrow-left is-hidden" type="button" data-action="rail-scroll" data-direction="-1" tabindex="-1" aria-label="Scroll ${esc(title)} left">‹</button>
-    <div class="rail">${visibleItems.map((item) => card(item, { landscape })).join('')}</div>
     <button class="rail-arrow rail-arrow-right" type="button" data-action="rail-scroll" data-direction="1" tabindex="-1" aria-label="Scroll ${esc(title)} right">›</button>
-  </div></section>`;
+  </div></div><div class="rail-shell"><div class="rail">${visibleItems.map((item) => card(item, { landscape })).join('')}</div></div></section>`;
+}
+
+function uniqueTitles(items) {
+  const seen = new Set();
+  return items.filter((item) => {
+    if (!item?.ratingKey || seen.has(item.ratingKey)) return false;
+    seen.add(item.ratingKey);
+    return true;
+  });
+}
+
+function viewingActivity(item) {
+  return Number(item?.lastViewedAt || 0) || (item?.isWatched || Number(item?.viewedCount || 0) > 0 ? 1 : 0);
+}
+
+function recommendationScore(candidate, anchor, preferredGenres = new Map()) {
+  const shared = (candidate.genres || []).filter((genre) => anchor?.genres?.includes(genre)).length;
+  const affinity = (candidate.genres || []).reduce((total, genre) => total + (preferredGenres.get(genre) || 0), 0);
+  return shared * 100 + affinity * 12 + Number(candidate.audienceRating || 0) * 2
+    + Math.min(10, Math.max(0, Number(candidate.year || 0) - 2016)) + Number(candidate.addedAt || 0) / 1e10;
+}
+
+function watchedAnchors(items) {
+  return [...items].filter((item) => viewingActivity(item) > 0)
+    .sort((left, right) => viewingActivity(right) - viewingActivity(left));
+}
+
+function preferredGenreWeights(items) {
+  const weights = new Map();
+  watchedAnchors(items).forEach((item, index) => {
+    const weight = Math.max(1, 8 - index);
+    for (const genre of item.genres || []) weights.set(genre, (weights.get(genre) || 0) + weight);
+  });
+  return weights;
+}
+
+function recommendationRows(items, maximum = 2) {
+  const anchors = watchedAnchors(items);
+  const preferredGenres = preferredGenreWeights(items);
+  const used = new Set();
+  const rows = [];
+  for (const anchor of anchors) {
+    const candidates = items.filter((candidate) => candidate.ratingKey !== anchor.ratingKey && !candidate.isWatched
+      && (candidate.genres || []).some((genre) => anchor.genres?.includes(genre)))
+      .sort((left, right) => recommendationScore(right, anchor, preferredGenres) - recommendationScore(left, anchor, preferredGenres))
+      .filter((candidate) => !used.has(candidate.ratingKey));
+    if (candidates.length < 2) continue;
+    const selected = candidates.slice(0, 24);
+    selected.forEach((candidate) => used.add(candidate.ratingKey));
+    rows.push({ title: `Because you watched ${anchor.title}`, items: selected });
+    if (rows.length >= maximum) break;
+  }
+  return rows;
+}
+
+function topPicks(items) {
+  const preferredGenres = preferredGenreWeights(items);
+  return [...items].filter((item) => !item.isWatched)
+    .sort((left, right) => recommendationScore(right, null, preferredGenres) - recommendationScore(left, null, preferredGenres));
+}
+
+function newestReleases(items) {
+  const releaseValue = (item) => Date.parse(item.releaseDate || '') || Number(item.year || 0) * 31557600000;
+  return [...items].sort((left, right) => releaseValue(right) - releaseValue(left) || Number(right.addedAt || 0) - Number(left.addedAt || 0));
 }
 
 function homeShelves() {
   const { movies, shows, continueWatching, watchlist } = state.catalog;
-  const recentlyAdded = [...movies, ...shows].sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
-  const picks = [...movies.filter((item) => !item.isWatched), ...shows.filter((item) => !item.isWatched)];
+  const library = uniqueTitles([...movies, ...shows]);
+  const recentlyAdded = [...library].sort((left, right) => Number(right.addedAt || 0) - Number(left.addedAt || 0));
+  const personalRows = recommendationRows(library, 2);
   return [
     shelf('Continue Watching', continueWatching, true),
-    shelf('Top Picks for You', picks),
+    shelf('New Releases', newestReleases(library)),
+    ...personalRows.map((row) => shelf(row.title, row.items)),
+    shelf('Top Picks for You', topPicks(library)),
     shelf('Recently Added', recentlyAdded),
-    shelf('Your Watchlist', watchlist),
-    shelf('Movies', movies),
-    shelf('Series', shows),
+    shelf('From Your Watchlist', watchlist),
   ].join('');
 }
 
@@ -257,6 +321,9 @@ function alphabeticalGrid(items) {
   }
   const letters = [...groups.keys()].sort((left, right) => left === '#' ? 1 : right === '#' ? -1 : left.localeCompare(right));
   const index = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((letter) => `<button type="button" data-action="alpha-jump" data-letter="${letter}" ${groups.has(letter) ? '' : 'disabled'} aria-label="Jump to ${letter}">${letter}</button>`).join('');
+  if (!state.config.splitAlphabetical) {
+    return `<div class="alphabetical-layout continuous-alphabetical"><div class="grid continuous-grid">${letters.flatMap((letter) => groups.get(letter).map((item, index) => card(item, { alpha: index === 0 ? letter : null }))).join('')}</div><aside class="alpha-index" aria-label="Alphabetical jump">${index}</aside></div>`;
+  }
   return `<div class="alphabetical-layout"><div class="alphabetical-groups">${letters.map((letter) => {
     const group = groups.get(letter);
     return `<section class="alpha-group" data-alpha-group="${letter}"><div class="alpha-heading"><h2>${letter}</h2><span>${group.length} ${group.length === 1 ? 'title' : 'titles'}</span></div><div class="grid">${group.map((item) => card(item)).join('')}</div></section>`;
@@ -266,11 +333,12 @@ function alphabeticalGrid(items) {
 function rowsFor(items) {
   const genres = genresFor(items);
   if (state.genre) return shelf(state.genre, sortAlphabetically(items.filter((item) => item.genres?.includes(state.genre))));
-  const result = [shelf('All titles', sortAlphabetically(items))];
+  const result = recommendationRows(items, 1).map((row) => shelf(row.title, row.items));
   for (const genre of genres) {
     const matching = items.filter((item) => item.genres?.includes(genre));
     if (matching.length) result.push(shelf(genre, sortAlphabetically(matching)));
   }
+  if (!result.length && items.length) result.push(shelf(state.tab === 'series' ? 'Browse Series' : 'Browse Movies', sortAlphabetically(items)));
   return result.join('');
 }
 
@@ -382,6 +450,11 @@ function settingsPage() {
         <div class="settings-actions"><button class="secondary settings-button" data-action="check-update" ${['checking','downloading'].includes(state.update?.status) ? 'disabled' : ''}>${esc(updateButtonLabel())}</button><button class="primary settings-button" data-action="install-update" ${state.update?.status === 'downloaded' ? '' : 'hidden'}>Install and restart</button></div>
         <small class="update-version" data-update-version>Installed version ${esc(state.update?.currentVersion || '—')} · Updates from GitHub Releases</small>
       </section>
+      <section class="settings-card browsing-card"><div class="settings-card-head"><span class="settings-icon">A–Z</span><div><span class="settings-kicker">Library</span><h2>Grid organization</h2></div></div>
+        <p>Keep one compact alphabetical grid, or separate every letter into its own labeled section. Letter keys and the A–Z index work in both modes.</p>
+        <label class="field"><span>Alphabetical layout</span><select id="grid-organization"><option value="continuous" ${state.config.splitAlphabetical ? '' : 'selected'}>Continuous grid</option><option value="sections" ${state.config.splitAlphabetical ? 'selected' : ''}>Separate A–Z sections</option></select></label>
+        <button class="primary settings-button" data-action="save-browsing">Save browsing layout</button>
+      </section>
       <section class="settings-card controls-card"><div class="settings-card-head"><span class="settings-icon">⌨</span><div><span class="settings-kicker">Navigation</span><h2>Desktop controls</h2></div></div>
         <div class="shortcut-grid"><div><kbd>← ↑ ↓ →</kbd><span>Move</span></div><div><kbd>Enter</kbd><span>Select</span></div><div><kbd>A–Z</kbd><span>Jump in grid</span></div><div><kbd>Ctrl + F</kbd><span>Search</span></div><div><kbd>Esc</kbd><span>Back</span></div><div><kbd>F11</kbd><span>Full screen</span></div></div>
       </section>
@@ -458,15 +531,14 @@ function bindPage() {
     if (state.tab === 'home' && item) updateHero(item);
     node.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
   }));
-  document.querySelectorAll('.rail-shell').forEach((shell) => {
-    const rail = shell.querySelector('.rail');
+  document.querySelectorAll('.section').forEach((section) => {
+    const rail = section.querySelector('.rail');
     if (!rail) return;
-    const refresh = () => updateRailArrows(shell);
+    const refresh = () => updateRailArrows(section);
     rail.addEventListener('scroll', refresh, { passive: true });
     rail.addEventListener('wheel', (event) => {
-      if (rail.scrollWidth <= rail.clientWidth + 2 || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
       event.preventDefault();
-      rail.scrollBy({ left: event.deltaY, behavior: 'auto' });
+      rail.closest('.browse-scroll, .detail-page, .search-page, .collections-page')?.scrollBy({ top: event.deltaY, behavior: 'auto' });
     }, { passive: false });
     requestAnimationFrame(refresh);
   });
@@ -493,7 +565,7 @@ function updateRailArrows(shell) {
 }
 
 function scrollRail(button) {
-  const shell = button.closest('.rail-shell');
+  const shell = button.closest('.section');
   const rail = shell?.querySelector('.rail');
   if (!rail) return;
   const direction = Number(button.dataset.direction) || 1;
@@ -503,13 +575,13 @@ function scrollRail(button) {
 
 function jumpToLetter(letter) {
   const normalized = String(letter || '').toUpperCase();
-  const group = [...document.querySelectorAll('[data-alpha-group]')].find((node) => node.dataset.alphaGroup === normalized);
-  if (!group) {
+  const target = document.querySelector(`[data-alpha-group="${normalized}"], [data-alpha-start="${normalized}"]`);
+  if (!target) {
     showToast(`No ${state.tab === 'series' ? 'series' : 'movies'} beginning with ${normalized}.`);
     return false;
   }
-  group.scrollIntoView({ block: 'start', behavior: 'smooth' });
-  const first = group.querySelector('.media-card');
+  target.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  const first = target.matches('.media-card') ? target : target.querySelector('.media-card');
   setTimeout(() => first?.focus({ preventScroll: true }), 180);
   return true;
 }
@@ -929,6 +1001,10 @@ document.addEventListener('click', async (event) => {
     state.config.quality = document.getElementById('quality').value;
     state.config.enhancement = document.getElementById('enhancement').value;
     await window.minova.savePreferences({ quality: state.config.quality, enhancement: state.config.enhancement }); showToast('Native playback settings saved.');
+  } else if (action === 'save-browsing') {
+    state.config.splitAlphabetical = document.getElementById('grid-organization').value === 'sections';
+    await window.minova.savePreferences({ splitAlphabetical: state.config.splitAlphabetical });
+    showToast(state.config.splitAlphabetical ? 'Grid will use separate A–Z sections.' : 'Grid will stay compact and continuous.');
   } else if (action === 'disconnect') {
     await window.minova.disconnect(); state.config = await window.minova.config(); state.catalog = null; state.routeStack = []; state.route = { type: 'browse' }; state.plexSignIn = { status: 'idle', code: '', authorizationUrl: '', servers: [], error: null }; render();
   } else if (action === 'watched') {
@@ -990,7 +1066,7 @@ document.addEventListener('keydown', (event) => {
 });
 
 window.addEventListener('resize', () => {
-  document.querySelectorAll('.rail-shell').forEach((shell) => updateRailArrows(shell));
+  document.querySelectorAll('.section').forEach((section) => updateRailArrows(section));
 });
 
 function renderWindowState(windowState = {}) {
@@ -1066,6 +1142,7 @@ window.__runMinovaQa = async function runMinovaQa() {
   check('Movies header exposes the real Rows/Grid toggle', Boolean(headerLayout), headerLayout?.getAttribute('aria-label') || 'missing');
   headerLayout?.click(); await wait(140);
   check('Header Grid toggle creates the alphabetical catalog grid', state.layout === 'grid' && Boolean(document.querySelector('.alpha-index')) && Boolean(document.querySelector('.grid .media-card')), `${state.layout}:${document.querySelectorAll('.grid .media-card').length}`);
+  check('Grid defaults to one compact continuous layout', Boolean(document.querySelector('.continuous-grid')) && !document.querySelector('.alpha-group'), document.querySelector('.continuous-grid') ? 'continuous' : 'separated');
   await press('ArrowDown');
   check('Down from header enters the genre selector after grid render', document.activeElement?.id === 'genre-filter', activeLabel());
   await press('ArrowDown');
@@ -1075,7 +1152,7 @@ window.__runMinovaQa = async function runMinovaQa() {
   const letterJumpItem = findItem(document.activeElement?.dataset?.key);
   check('Typing G jumps to the first G title', letterJumpItem?.title?.toUpperCase().startsWith('G'), letterJumpItem?.title || activeLabel());
   await press('ArrowRight');
-  check('Right moves across alphabetical grid groups', Boolean(document.activeElement?.dataset?.key) && document.activeElement.dataset.key !== letterJumpItem?.ratingKey, activeLabel());
+  check('Right moves across the alphabetical grid', Boolean(document.activeElement?.dataset?.key) && document.activeElement.dataset.key !== letterJumpItem?.ratingKey, activeLabel());
   const beforeDown = document.activeElement?.dataset?.key;
   await press('ArrowDown');
   check('Down moves to the next grid row', Boolean(document.activeElement?.dataset?.key) && document.activeElement.dataset.key !== beforeDown, activeLabel());
@@ -1096,15 +1173,26 @@ window.__runMinovaQa = async function runMinovaQa() {
   returnToRows?.click(); await wait(140);
   check('Header layout toggle returns to Rows', state.layout === 'rows' && Boolean(document.querySelector('.section .rail')), state.layout);
   check('Rows include a shelf for every available genre', genresFor(state.catalog.movies).every((genre) => [...document.querySelectorAll('.section-title')].some((title) => title.textContent === genre)), [...document.querySelectorAll('.section-title')].map((title) => title.textContent).join(', '));
+  check('Movie rows avoid the redundant All titles shelf', ![...document.querySelectorAll('.section-title')].some((title) => title.textContent === 'All titles'), [...document.querySelectorAll('.section-title')].map((title) => title.textContent).join(', '));
+  check('Movie rows include a personalized Because you watched shelf', [...document.querySelectorAll('.section-title')].some((title) => title.textContent.startsWith('Because you watched ')), [...document.querySelectorAll('.section-title')].map((title) => title.textContent).join(', '));
 
   document.querySelector('[data-tab="home"]').click(); await wait(140);
   check('Home returns focus to selected header tab', document.activeElement?.dataset?.tab === 'home', activeLabel());
   check('Desktop Home no longer renders the large hero', !document.querySelector('.hero, .hero-bg'), document.querySelector('.hero, .hero-bg') ? 'present' : 'removed');
-  const scrollableShelf = [...document.querySelectorAll('.home-shelves .rail-shell')].find((shell) => !shell.querySelector('.rail-arrow-right')?.disabled);
-  check('Scrollable shelves show a right-edge arrow', Boolean(scrollableShelf) && !scrollableShelf.querySelector('.rail-arrow-right')?.classList.contains('is-hidden'), scrollableShelf ? 'visible' : 'missing');
-  check('Shelf left arrow stays hidden before moving right', scrollableShelf?.querySelector('.rail-arrow-left')?.classList.contains('is-hidden'), scrollableShelf?.querySelector('.rail-arrow-left')?.className || 'missing');
-  scrollableShelf?.querySelector('.rail-arrow-right')?.click(); await wait(460);
-  check('Shelf left arrow appears after moving right', Number(scrollableShelf?.querySelector('.rail')?.scrollLeft) > 6 && !scrollableShelf?.querySelector('.rail-arrow-left')?.classList.contains('is-hidden'), scrollableShelf?.querySelector('.rail')?.scrollLeft || 0);
+  const homeTitles = [...document.querySelectorAll('.home-shelves .section-title')].map((title) => title.textContent);
+  check('Home provides discovery and personalized shelves', homeTitles.includes('New Releases') && homeTitles.includes('Top Picks for You') && homeTitles.some((title) => title.startsWith('Because you watched ')), homeTitles.join(', '));
+  check('Home does not duplicate Movies or Series library lists', !homeTitles.includes('Movies') && !homeTitles.includes('Series'), homeTitles.join(', '));
+  const scrollableSection = [...document.querySelectorAll('.home-shelves .section')].find((section) => !section.querySelector('.rail-arrow-right')?.disabled);
+  check('Scrollable shelves show a clean heading-level right arrow', Boolean(scrollableSection) && !scrollableSection.querySelector('.rail-arrow-right')?.classList.contains('is-hidden'), scrollableSection ? 'visible' : 'missing');
+  check('Shelf left arrow stays hidden before moving right', scrollableSection?.querySelector('.rail-arrow-left')?.classList.contains('is-hidden'), scrollableSection?.querySelector('.rail-arrow-left')?.className || 'missing');
+  const wheelRail = scrollableSection?.querySelector('.rail');
+  const homePage = document.querySelector('.home-shelves');
+  const railBeforeWheel = Number(wheelRail?.scrollLeft || 0);
+  homePage.scrollTop = 0;
+  wheelRail?.dispatchEvent(new WheelEvent('wheel', { deltaY: 260, bubbles: true, cancelable: true })); await wait(100);
+  check('Mouse wheel scrolls the page vertically without moving the shelf', homePage.scrollTop > 0 && Number(wheelRail?.scrollLeft || 0) === railBeforeWheel, `page=${homePage.scrollTop}; rail=${wheelRail?.scrollLeft || 0}`);
+  scrollableSection?.querySelector('.rail-arrow-right')?.click(); await wait(460);
+  check('Shelf left arrow appears after moving right', Number(scrollableSection?.querySelector('.rail')?.scrollLeft) > 6 && !scrollableSection?.querySelector('.rail-arrow-left')?.classList.contains('is-hidden'), scrollableSection?.querySelector('.rail')?.scrollLeft || 0);
   await press('ArrowDown');
   const firstShelfKey = document.activeElement?.dataset?.key;
   check('Down from Home enters the first shelf directly', Boolean(firstShelfKey), activeLabel());
@@ -1144,7 +1232,7 @@ window.__runMinovaQa = async function runMinovaQa() {
 
   document.querySelector('[data-action="settings"]').click(); await wait(140);
   check('Settings receives focus on its header control', document.activeElement?.dataset?.action === 'settings', activeLabel());
-  check('Settings includes the five-card dashboard with automatic updates', document.querySelectorAll('.settings-grid .settings-card').length === 5 && Boolean(document.querySelector('[data-action="check-update"]')), document.querySelectorAll('.settings-grid .settings-card').length);
+  check('Settings includes the six-card dashboard with browsing and automatic updates', document.querySelectorAll('.settings-grid .settings-card').length === 6 && Boolean(document.querySelector('[data-action="check-update"]')) && Boolean(document.getElementById('grid-organization')), document.querySelectorAll('.settings-grid .settings-card').length);
   check('Settings dashboard uses two columns', getComputedStyle(document.querySelector('.settings-grid')).gridTemplateColumns.split(' ').length === 2, getComputedStyle(document.querySelector('.settings-grid')).gridTemplateColumns);
   const previousUpdate = state.update;
   dismissedUpdateVersion = null;
@@ -1169,6 +1257,14 @@ window.__runMinovaQa = async function runMinovaQa() {
   const previousSync = state.catalogSyncedAt;
   document.activeElement?.click(); await wait(180);
   check('Sync Plex now refreshes the catalog', state.catalogSyncedAt > previousSync, state.catalogSyncedAt);
+  const gridOrganization = document.getElementById('grid-organization');
+  check('Grid organization defaults to Continuous grid', gridOrganization?.value === 'continuous', gridOrganization?.value || 'missing');
+  gridOrganization.value = 'sections';
+  document.querySelector('[data-action="save-browsing"]')?.click(); await wait(100);
+  check('Separate A–Z sections preference saves from Settings', state.config.splitAlphabetical === true, state.config.splitAlphabetical);
+  document.querySelector('[data-tab="movies"]')?.click(); await wait(120);
+  document.querySelector('[data-action="layout"]')?.click(); await wait(120);
+  check('Separated preference renders labeled letter sections', state.layout === 'grid' && Boolean(document.querySelector('.alpha-group')), document.querySelector('.alpha-group')?.dataset?.alphaGroup || 'missing');
 
   const failed = results.filter((result) => !result.passed);
   return { passed: failed.length === 0, total: results.length, failed: failed.length, results };

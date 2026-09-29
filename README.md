@@ -8,7 +8,7 @@ The Windows edition mirrors the Android TV 2.9 visual language while adapting it
 - Advanced manual connection for reverse proxies, Tailscale, and custom Plex server addresses.
 - Windows-encrypted Plex token; the renderer never receives the token.
 - Continue Watching, discovery shelves, Movies, Series, Collections, Watchlist, and search.
-- Complete genre shelves and filtering, edge-arrow shelf scrolling, and an alphabetical grid with A–Z keyboard jumping.
+- Personalized Home discovery, complete genre shelves and filtering, clean edge-arrow shelf controls, and an alphabetical grid with A–Z keyboard jumping.
 - Movie, series, season, and episode details.
 - Embedded libmpv Direct Play with automatic Plex HLS conversion fallback.
 - D3D11 hardware decoding, native audio/subtitle track discovery, precise seeking, and fullscreen playback.
@@ -16,7 +16,7 @@ The Windows edition mirrors the Android TV 2.9 visual language while adapting it
 - Plex timeline progress plus watched and Watchlist updates.
 - Continue elsewhere handoff with confirmed Plex progress saving and foreground Continue Watching refresh.
 - Automatic update checks and in-app installation from official GitHub Releases.
-- Mouse-wheel shelf scrolling, Arrow-key navigation, Enter, Escape/Backspace, Ctrl+F search, and fullscreen controls.
+- Continuous or separated A–Z grid organization, Arrow-key navigation, Enter, Escape/Backspace, Ctrl+F search, and fullscreen controls.
 
 ## Development
 

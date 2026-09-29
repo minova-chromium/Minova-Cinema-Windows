@@ -220,10 +220,17 @@ function proxyUrl(target) {
 }
 
 function demoCatalog() {
-  const make = (id, title, kind, year, progress = 0) => ({
+  const genreSets = [
+    ['Drama', 'Adventure'], ['Science Fiction', 'Thriller'], ['Crime', 'Drama'],
+    ['Adventure', 'Thriller'], ['Drama', 'Mystery'],
+  ];
+  const make = (id, title, kind, year, progress = 0, options = {}) => ({
     ratingKey: `demo-${id}`, title, kind, year, summary: 'A cinematic selection from your personal Plex library.',
     contentRating: 'PG-13', durationMs: 6600000, viewOffsetMs: 6600000 * progress, progress,
-    posterPath: null, backdropPath: null, genres: ['Drama', 'Adventure'], isWatched: false,
+    posterPath: null, backdropPath: null, genres: options.genres || genreSets[id % genreSets.length],
+    isWatched: Boolean(options.isWatched), viewedCount: options.isWatched ? 1 : 0,
+    lastViewedAt: options.lastViewedAt || null, audienceRating: 6.6 + (id % 4) * .7,
+    addedAt: 1790000000 - id * 84000, releaseDate: `${year}-${String((id % 9) + 1).padStart(2, '0')}-15`,
     credits: [
       { name: 'Ava Stone', role: 'Lead cast', imagePath: 'asset:minova-symbol-color.svg' },
       { name: 'Noah Vale', role: 'Cast', imagePath: 'asset:minova-cinema-wordmark.png' },
@@ -232,12 +239,16 @@ function demoCatalog() {
   });
   const movies = [
     make(1, 'The Last Horizon', 'movie', 2026), make(2, 'Northern Lights', 'movie', 2025),
-    make(3, 'Parallel', 'movie', 2024), make(4, 'Midnight Signal', 'movie', 2026),
+    make(3, 'Parallel', 'movie', 2024, 0, { genres: ['Science Fiction', 'Thriller'], isWatched: true, lastViewedAt: 1790600000 }), make(4, 'Midnight Signal', 'movie', 2026, 0, { genres: ['Science Fiction', 'Thriller'] }),
     make(5, 'The Long Road Home', 'movie', 2023), make(11, 'Silent Orbit', 'movie', 2025),
-    make(12, 'The Crossing', 'movie', 2024), make(13, 'Glass River', 'movie', 2026),
+    make(12, 'The Crossing', 'movie', 2024), make(13, 'Glass River', 'movie', 2026, 0, { genres: ['Science Fiction', 'Thriller'] }),
     make(14, 'After Midnight', 'movie', 2023), make(15, 'The Signal', 'movie', 2025),
   ];
-  const shows = [make(6, 'Atlas Station', 'show', 2026), make(7, 'After the Rain', 'show', 2025), make(8, 'The Archive', 'show', 2024)];
+  const shows = [
+    make(6, 'Atlas Station', 'show', 2026, 0, { genres: ['Drama', 'Mystery'], isWatched: true, lastViewedAt: 1790500000 }),
+    make(7, 'After the Rain', 'show', 2025, 0, { genres: ['Drama', 'Mystery'] }),
+    make(8, 'The Archive', 'show', 2024, 0, { genres: ['Drama', 'Mystery'] }),
+  ];
   return {
     serverName: 'Minova Demo', movies, shows,
     continueWatching: [make(9, 'City of Glass', 'movie', 2025, .34), make(10, 'Edge of Winter', 'movie', 2024, .72)],
@@ -300,6 +311,7 @@ function registerIpc() {
     return {
       connected: Boolean(connection), server: connection?.server || '', quality: connection?.quality || 'original',
       enhancement: stored.enhancement || 'balanced', volume: Number.isFinite(stored.volume) ? stored.volume : 100,
+      splitAlphabetical: stored.splitAlphabetical === true,
       demoMode, captureView,
     };
   });
@@ -359,6 +371,7 @@ function registerIpc() {
       quality: preferences.quality || stored.quality || 'original',
       enhancement: preferences.enhancement || stored.enhancement || 'balanced',
       volume: Number.isFinite(preferences.volume) ? preferences.volume : (Number.isFinite(stored.volume) ? stored.volume : 100),
+      splitAlphabetical: typeof preferences.splitAlphabetical === 'boolean' ? preferences.splitAlphabetical : stored.splitAlphabetical === true,
     });
     return true;
   });

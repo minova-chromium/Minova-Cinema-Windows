@@ -12,13 +12,16 @@ test('normalizes a LAN Plex address and supplies the default port', () => {
 test('maps Plex metadata without exposing an authenticated URL', () => {
   const item = mapMetadata({
     ratingKey: '42', type: 'movie', title: 'Example', year: 2026, duration: 600000,
-    viewOffset: 150000, thumb: '/library/metadata/42/thumb/1', art: '/library/metadata/42/art/1',
+    viewOffset: 150000, lastViewedAt: 1790000000, viewCount: 1,
+    thumb: '/library/metadata/42/thumb/1', art: '/library/metadata/42/art/1',
     Genre: [{ tag: 'Drama' }], Role: [{ tag: 'Ava Stone', role: 'Lead', thumb: '/library/people/9/thumb' }],
     Producer: [{ tag: 'Maya North', thumb: '/library/people/10/thumb' }],
     Media: [{ container: 'mkv', videoCodec: 'hevc', Part: [{ id: 7, key: '/library/parts/7/file.mkv' }] }],
   });
   assert.equal(item.title, 'Example');
   assert.equal(item.progress, 0.25);
+  assert.equal(item.lastViewedAt, 1790000000);
+  assert.equal(item.viewedCount, 1);
   assert.equal(item.posterPath, '/library/metadata/42/thumb/1');
   assert.equal(item.backdropPath, '/library/metadata/42/art/1');
   assert.deepEqual(item.credits[0], { name: 'Ava Stone', role: 'Lead', imagePath: '/library/people/9/thumb' });
