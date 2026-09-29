@@ -1232,6 +1232,11 @@ window.__runMinovaQa = async function runMinovaQa() {
   check('Movie Cast & Crew uses actor portrait cards', Boolean(document.querySelector('.credit-card .credit-avatar img')), document.querySelectorAll('.credit-card .credit-avatar img').length);
   const firstCreditRole = document.querySelector('.credit-card .credit-role');
   check('Cast names and roles stay visible without initial scrolling', Boolean(firstCreditRole) && firstCreditRole.getBoundingClientRect().bottom <= innerHeight, firstCreditRole?.getBoundingClientRect().bottom);
+  const castHeading = document.querySelector('.cast-section > .section-title');
+  const firstCastCard = document.querySelector('.cast-section > .rail .credit-card');
+  const detailActions = document.querySelector('.detail-copy .actions');
+  check('Cast heading aligns with the cast rail', Boolean(castHeading && firstCastCard) && Math.abs(castHeading.getBoundingClientRect().left - firstCastCard.getBoundingClientRect().left) < 3, `${castHeading?.getBoundingClientRect().left}:${firstCastCard?.getBoundingClientRect().left}`);
+  check('Cast section follows the detail actions without a large offset', Boolean(castHeading && detailActions) && castHeading.getBoundingClientRect().top - detailActions.getBoundingClientRect().bottom < 90, castHeading && detailActions ? castHeading.getBoundingClientRect().top - detailActions.getBoundingClientRect().bottom : 'missing');
   await press('ArrowRight');
   check('Right moves across detail actions', Boolean(document.activeElement?.closest('.detail-copy .actions')), activeLabel());
   await press('Backspace');

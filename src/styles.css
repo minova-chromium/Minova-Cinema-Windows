@@ -239,14 +239,15 @@ body.fullscreen .content, body.fullscreen .detail-bg { inset-block-start: 0; }
 .detail-bg img { width: 100%; height: 100%; object-fit: cover; object-position: center 28%; opacity: .78; filter: saturate(.92) contrast(1.04); }
 .detail-bg::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(8,12,18,.98) 0%, rgba(8,12,18,.88) 34%, rgba(8,12,18,.28) 72%, rgba(8,12,18,.15)), linear-gradient(0deg, var(--night) 0%, rgba(8,12,18,.18) 46%, rgba(8,12,18,.22) 100%); }
 .back-button { position: fixed; z-index: 10; top: 58px; left: 42px; width: 48px; min-height: 48px; padding: 0; border-radius: 50%; color: var(--white); background: rgba(23,32,44,.85); font-size: 25px; }
-.detail-copy { position: relative; z-index: 2; width: min(820px, 66vw); min-height: 640px; padding: 130px 0 45px 6.3vw; }
+.detail-copy { position: relative; z-index: 2; width: min(820px, 66vw); padding: 130px 0 34px 6.3vw; }
 .eyebrow { color: var(--cyan); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .detail-copy h1 { margin: 16px 0 0; font-size: clamp(48px, 5.4vw, 86px); line-height: 1; letter-spacing: -2px; }
 .genres { margin-top: 15px; color: var(--cyan); font-size: 18px; }
 .tagline { color: var(--cyan); font-size: 24px; }
 .detail-summary { color: rgba(247,250,252,.83); font-size: 20px; line-height: 1.48; }
 .detail-section { position: relative; z-index: 2; padding-bottom: 64px; }
-.cast-section { margin-top: -4px; }
+.cast-section { margin-top: 0; }
+.cast-section > .section-title { margin: 0 4.3vw 12px; }
 .credit-card { flex: 0 0 126px; min-height: 166px; padding: 0; color: var(--white); text-align: center; background: transparent; transform-origin: center; transition: transform .16s ease; }
 .credit-card:focus-visible { transform: scale(1.06); }
 .credit-avatar { display: grid; width: 112px; height: 112px; margin: 0 auto; overflow: hidden; place-items: center; border: 1px solid var(--raised); border-radius: 50%; background: var(--raised); }
@@ -294,6 +295,7 @@ body.fullscreen .content, body.fullscreen .detail-bg { inset-block-start: 0; }
   .toolbar { padding-inline: 3vw; }
   .alphabetical-layout { padding-right: calc(3vw - 4px); }
   .alpha-heading { margin-inline: 3vw; }
+  .cast-section > .section-title { margin-inline: 3vw; }
   .collection-grid { gap-inline: 14px; }
   .settings-grid { gap: 14px; }
   .settings-card { padding: 20px; }

@@ -19,6 +19,7 @@ This release adds secure Plex browser sign-in, automatic server discovery, and a
 - Keeps the mouse wheel dedicated to vertical page scrolling while shelf arrows control horizontal movement.
 - Adds an A–Z index plus direct letter-key jumping for Movies and Series, with a saved choice between a continuous grid and separate letter sections.
 - Matches Android series playback logic: Play starts the first episode, Resume returns to an in-progress episode, and completed episodes advance to the next unwatched episode.
+- Aligns Cast & Crew with its portrait rail and removes the oversized gap below detail actions.
 - Adds Ctrl+F search and documents the desktop shortcuts in Settings.
 - Preserves the redesigned interface, mini player, native libmpv playback, automatic recovery, and in-app updater from 1.0.3.
 
@@ -28,4 +29,4 @@ Users on 1.0.0 need to install a newer build manually once because 1.0.0 did not
 
 `Minova-Cinema-Desktop-1.0.4-Setup.exe`
 
-SHA-256: `8A830107F6756537A0D53BE4A919986915D0032C3771E1BBC64FE52814F68C46`
+SHA-256: `9A6A3282EEB23F96C98D2E737FC64363EFB912046DE5BAC5345928CEF6DB5759`
