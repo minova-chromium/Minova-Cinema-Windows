@@ -10,6 +10,7 @@ The Windows edition mirrors the Android TV 2.9 visual language while adapting it
 - Continue Watching, discovery shelves, Movies, Series, Collections, Watchlist, and search.
 - Personalized Home discovery, complete genre shelves and filtering, clean edge-arrow shelf controls, and an alphabetical grid with A–Z keyboard jumping.
 - Movie, series, season, and episode details.
+- Series Play/Resume automatically selects an in-progress episode, the next unwatched episode, or episode one for a fresh series.
 - Embedded libmpv Direct Play with automatic Plex HLS conversion fallback.
 - D3D11 hardware decoding, native audio/subtitle track discovery, precise seeking, and fullscreen playback.
 - GPU scaling plus optional ArtCNN High and Ultra shader modes for 1080p-and-lower video.

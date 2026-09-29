@@ -281,17 +281,44 @@ function newestReleases(items) {
   return [...items].sort((left, right) => releaseValue(right) - releaseValue(left) || Number(right.addedAt || 0) - Number(left.addedAt || 0));
 }
 
+function topRated(items) {
+  return [...items].filter((item) => !item.isWatched && Number(item.audienceRating || 0) > 0)
+    .sort((left, right) => Number(right.audienceRating || 0) - Number(left.audienceRating || 0)
+      || Number(right.addedAt || 0) - Number(left.addedAt || 0));
+}
+
+function hiddenGems(items) {
+  const cutoff = new Date().getFullYear() - 3;
+  return topRated(items).filter((item) => Number(item.year || 0) > 0 && Number(item.year) <= cutoff);
+}
+
+function favoriteGenreRow(items) {
+  const favorite = [...preferredGenreWeights(items).entries()].sort((left, right) => right[1] - left[1])[0]?.[0];
+  if (!favorite) return null;
+  const matches = topPicks(items).filter((item) => item.genres?.includes(favorite));
+  return matches.length >= 2 ? { title: `More ${favorite} for You`, items: matches } : null;
+}
+
+function watchAgain(items) {
+  return watchedAnchors(items).filter((item) => item.isWatched);
+}
+
 function homeShelves() {
   const { movies, shows, continueWatching, watchlist } = state.catalog;
   const library = uniqueTitles([...movies, ...shows]);
   const recentlyAdded = [...library].sort((left, right) => Number(right.addedAt || 0) - Number(left.addedAt || 0));
-  const personalRows = recommendationRows(library, 2);
+  const personalRows = recommendationRows(library, 1);
+  const favoriteRow = favoriteGenreRow(library);
   return [
     shelf('Continue Watching', continueWatching, true),
     shelf('New Releases', newestReleases(library)),
     ...personalRows.map((row) => shelf(row.title, row.items)),
     shelf('Top Picks for You', topPicks(library)),
+    favoriteRow ? shelf(favoriteRow.title, favoriteRow.items) : '',
+    shelf('Top Rated', topRated(library)),
+    shelf('Hidden Gems', hiddenGems(library)),
     shelf('Recently Added', recentlyAdded),
+    shelf('Watch Again', watchAgain(library)),
     shelf('From Your Watchlist', watchlist),
   ].join('');
 }
@@ -463,9 +490,11 @@ function settingsPage() {
   </div></div></div>`;
 }
 
-function detailPage(item, children = []) {
+function detailPage(item, children = [], seriesPlayback = null) {
   const inWatchlist = state.catalog.watchlist.some((entry) => entry.ratingKey === item.ratingKey);
   const bg = item.backdropPath || item.posterPath;
+  const playTarget = item.kind === 'show' ? seriesPlayback?.episode : !['season'].includes(item.kind) ? item : null;
+  const playLabel = item.kind === 'show' ? (seriesPlayback?.hasProgress ? 'Resume' : 'Play') : item.progress > 0 ? 'Resume' : 'Play';
   return `<div class="screen detail-page">
     <div class="detail-bg">${bg ? `<img src="${art(bg)}" alt="" aria-hidden="true">` : ''}</div>
     <button class="back-button" data-action="back" aria-label="Back">←</button>
@@ -476,7 +505,7 @@ function detailPage(item, children = []) {
       ${item.tagline ? `<p class="tagline">${esc(item.tagline)}</p>` : ''}
       <p class="detail-summary">${esc(item.summary || 'No summary is available from Plex.')}</p>
       <div class="actions">
-        ${item.kind !== 'show' && item.kind !== 'season' ? `<button class="primary" data-action="play" data-key="${esc(item.ratingKey)}">▶ &nbsp;${item.progress > 0 ? 'Resume' : 'Play'}</button>` : ''}
+        ${playTarget ? `<button class="primary" data-action="play" data-key="${esc(playTarget.ratingKey)}" data-series-action="${item.kind === 'show' ? 'true' : 'false'}">▶ &nbsp;${playLabel}</button>` : ''}
         <button class="secondary" data-action="watchlist" data-key="${esc(item.ratingKey)}" data-provider="${esc(item.providerRatingKey || '')}" data-value="${inWatchlist ? 'false' : 'true'}">${inWatchlist ? 'Remove from Plex Watchlist' : 'Add to Plex Watchlist'}</button>
         <button class="secondary" data-action="watched" data-key="${esc(item.ratingKey)}" data-value="${item.isWatched ? 'false' : 'true'}">${item.isWatched ? 'Mark unwatched' : 'Mark watched'}</button>
       </div>
@@ -503,7 +532,7 @@ function render() {
   if (!state.config.connected && !state.config.demoMode) { appRoot.innerHTML = onboarding(); bindPage(); refreshUpdateDialog(); return; }
   if (state.loading) { appRoot.innerHTML = loading(); refreshUpdateDialog(); return; }
   if (state.route.type === 'settings') appRoot.innerHTML = settingsPage();
-  else if (state.route.type === 'detail') appRoot.innerHTML = detailPage(state.route.item, state.route.children || []);
+  else if (state.route.type === 'detail') appRoot.innerHTML = detailPage(state.route.item, state.route.children || [], state.route.seriesPlayback || null);
   else if (state.route.type === 'collection') appRoot.innerHTML = collectionDetailPage(state.route.collection, state.route.members);
   else if (state.route.type === 'player') appRoot.innerHTML = playerPage(state.route.payload);
   else appRoot.innerHTML = browsePage();
@@ -911,12 +940,36 @@ function findItem(key) {
   return [...state.catalog.movies, ...state.catalog.shows, ...state.catalog.continueWatching, ...state.catalog.watchlist].find((item) => item.ratingKey === key);
 }
 
+function episodeOrder(left, right) {
+  const seasonValue = (item) => Number(item.seasonNumber || 0) === 0 ? 10000 : Number(item.seasonNumber || 0);
+  return seasonValue(left) - seasonValue(right) || Number(left.episodeNumber || 0) - Number(right.episodeNumber || 0);
+}
+
+async function resolveSeriesPlayback(show, seasons) {
+  const continueEpisodes = state.catalog.continueWatching.filter((item) => item.kind === 'episode' && item.grandparentRatingKey === show.ratingKey);
+  const orderedSeasons = [...seasons].filter((item) => item.kind === 'season').sort((left, right) => episodeOrder(left, right));
+  const episodeGroups = await Promise.all(orderedSeasons.map((season) => window.minova.children(season.ratingKey).catch(() => [])));
+  const episodes = episodeGroups.flat().filter((item) => item.kind === 'episode').sort(episodeOrder);
+  const episode = continueEpisodes.find((item) => item.viewOffsetMs > 0 && !item.isWatched)
+    || continueEpisodes.find((item) => !item.isWatched)
+    || episodes.find((item) => item.viewOffsetMs > 0 && !item.isWatched)
+    || episodes.find((item) => !item.isWatched)
+    || episodes[0]
+    || continueEpisodes[0]
+    || null;
+  return {
+    episode,
+    hasProgress: Number(show.viewedCount || 0) > 0 || show.isWatched || continueEpisodes.length > 0,
+  };
+}
+
 async function openDetails(key) {
   pushRoute({ type: 'detail', item: findItem(key) || { ratingKey: key, title: 'Loading…' }, children: [] });
   try {
     const item = await window.minova.details(key);
     const children = item?.kind === 'show' || item?.kind === 'season' ? await window.minova.children(key) : [];
-    state.route = { type: 'detail', item: item || findItem(key), children }; render();
+    const seriesPlayback = item?.kind === 'show' ? await resolveSeriesPlayback(item, children) : null;
+    state.route = { type: 'detail', item: item || findItem(key), children, seriesPlayback }; render();
   } catch (error) { showToast(errorMessage(error)); goBack(); }
 }
 
@@ -1088,10 +1141,25 @@ document.addEventListener('click', (event) => {
 window.minova.windowControls.onState(renderWindowState);
 window.minova.windowControls.state().then(renderWindowState);
 
+function recordLocalViewingSignal(playback) {
+  const key = playback?.kind === 'episode' ? playback.grandparentRatingKey : playback?.ratingKey;
+  if (!key || !state.catalog) return;
+  const item = [...state.catalog.movies, ...state.catalog.shows].find((candidate) => candidate.ratingKey === key);
+  if (!item) return;
+  item.lastViewedAt = Math.floor(Date.now() / 1000);
+  item.viewedCount = Math.max(1, Number(item.viewedCount || 0));
+}
+
 window.minova.nativePlayer.onClosed(() => {
   if (state.route.type !== 'player') return;
+  const playback = state.route.payload;
+  recordLocalViewingSignal(playback);
   state.route = state.routeStack.pop() || { type: 'browse' };
   render();
+  syncCatalog(null, { silent: true }).then((changed) => {
+    recordLocalViewingSignal(playback);
+    if (changed) render();
+  });
 });
 
 window.minova.nativePlayer.onHandoffCompleted((payload) => {
@@ -1181,6 +1249,12 @@ window.__runMinovaQa = async function runMinovaQa() {
   check('Desktop Home no longer renders the large hero', !document.querySelector('.hero, .hero-bg'), document.querySelector('.hero, .hero-bg') ? 'present' : 'removed');
   const homeTitles = [...document.querySelectorAll('.home-shelves .section-title')].map((title) => title.textContent);
   check('Home provides discovery and personalized shelves', homeTitles.includes('New Releases') && homeTitles.includes('Top Picks for You') && homeTitles.some((title) => title.startsWith('Because you watched ')), homeTitles.join(', '));
+  const becauseSections = [...document.querySelectorAll('.home-shelves .section')].filter((section) => section.querySelector('.section-title')?.textContent.startsWith('Because you watched '));
+  const becauseAnchorTitle = becauseSections[0]?.querySelector('.section-title')?.textContent.replace('Because you watched ', '');
+  const becauseAnchor = [...state.catalog.movies, ...state.catalog.shows].find((item) => item.title === becauseAnchorTitle);
+  check('Home shows exactly one recent Because you watched shelf', becauseSections.length === 1 && becauseAnchorTitle === 'Parallel', `${becauseSections.length}:${becauseAnchorTitle}`);
+  check('Because you watched never recommends the anchor itself', Boolean(becauseAnchor) && !becauseSections[0]?.querySelector(`[data-key="${becauseAnchor.ratingKey}"]`), becauseAnchor?.ratingKey || 'missing anchor');
+  check('Home offers several distinct recommendation types', homeTitles.includes('Top Rated') && homeTitles.includes('Hidden Gems') && homeTitles.includes('Watch Again') && homeTitles.some((title) => title.startsWith('More ')), homeTitles.join(', '));
   check('Home does not duplicate Movies or Series library lists', !homeTitles.includes('Movies') && !homeTitles.includes('Series'), homeTitles.join(', '));
   const scrollableSection = [...document.querySelectorAll('.home-shelves .section')].find((section) => !section.querySelector('.rail-arrow-right')?.disabled);
   check('Scrollable shelves show a clean heading-level right arrow', Boolean(scrollableSection) && !scrollableSection.querySelector('.rail-arrow-right')?.classList.contains('is-hidden'), scrollableSection ? 'visible' : 'missing');
@@ -1193,6 +1267,8 @@ window.__runMinovaQa = async function runMinovaQa() {
   check('Mouse wheel scrolls the page vertically without moving the shelf', homePage.scrollTop > 0 && Number(wheelRail?.scrollLeft || 0) === railBeforeWheel, `page=${homePage.scrollTop}; rail=${wheelRail?.scrollLeft || 0}`);
   scrollableSection?.querySelector('.rail-arrow-right')?.click(); await wait(460);
   check('Shelf left arrow appears after moving right', Number(scrollableSection?.querySelector('.rail')?.scrollLeft) > 6 && !scrollableSection?.querySelector('.rail-arrow-left')?.classList.contains('is-hidden'), scrollableSection?.querySelector('.rail')?.scrollLeft || 0);
+  recordLocalViewingSignal({ kind: 'movie', ratingKey: 'demo-1' }); render(); await wait(120);
+  check('A new viewing signal immediately refreshes the recommendation anchor', [...document.querySelectorAll('.home-shelves .section-title')].some((title) => title.textContent === 'Because you watched The Last Horizon'), [...document.querySelectorAll('.home-shelves .section-title')].map((title) => title.textContent).join(', '));
   await press('ArrowDown');
   const firstShelfKey = document.activeElement?.dataset?.key;
   check('Down from Home enters the first shelf directly', Boolean(firstShelfKey), activeLabel());
@@ -1225,9 +1301,16 @@ window.__runMinovaQa = async function runMinovaQa() {
   check('Back returns from a collection', state.route.type === 'browse' && state.tab === 'collections', `${state.route.type}:${state.tab}`);
 
   document.querySelector('[data-tab="series"]').click(); await wait(140);
-  document.querySelector('.rail .media-card')?.click(); await wait(180);
+  document.querySelector('.rail .media-card[data-key="demo-6"]')?.click(); await wait(260);
   check('Series opens its detail screen', state.route.type === 'detail' && state.route.item?.kind === 'show', `${state.route.type}:${state.route.item?.kind}`);
+  const seriesPrimary = document.querySelector('.detail-copy [data-series-action="true"]');
+  check('Progressed series detail offers Resume', seriesPrimary?.textContent.includes('Resume'), seriesPrimary?.textContent.trim() || 'missing');
+  check('Resume resolves the in-progress episode using Android logic', seriesPrimary?.dataset?.key === 'demo-6-season-1-episode-2', seriesPrimary?.dataset?.key || 'missing');
   check('Series Cast & Crew includes actor pictures', Boolean(document.querySelector('.cast-section .credit-avatar img')), document.querySelectorAll('.cast-section .credit-avatar img').length);
+  await press('Backspace');
+  document.querySelector('.rail .media-card[data-key="demo-7"]')?.click(); await wait(260);
+  const freshSeriesPrimary = document.querySelector('.detail-copy [data-series-action="true"]');
+  check('Unwatched series detail offers Play', freshSeriesPrimary?.textContent.includes('Play') && freshSeriesPrimary?.dataset?.key === 'demo-7-season-1-episode-1', `${freshSeriesPrimary?.textContent.trim() || 'missing'}:${freshSeriesPrimary?.dataset?.key || ''}`);
   await press('Backspace');
 
   document.querySelector('[data-action="settings"]').click(); await wait(140);

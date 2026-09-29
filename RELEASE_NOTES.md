@@ -12,11 +12,13 @@ This release adds secure Plex browser sign-in, automatic server discovery, and a
 - Encrypts the selected server token with Windows secure storage; account tokens never enter the renderer or settings file.
 - Groups Search, Rows/Grid, and Settings together at the right side of the desktop header.
 - Replaces the limited genre buttons with a complete genre selector and a shelf for every available genre.
-- Rebuilds Home around Continue Watching, New Releases, viewing-based recommendations, Top Picks, Recently Added, and Watchlist discovery without duplicate Movies or Series rows.
+- Rebuilds Home around Continue Watching, New Releases, one fresh viewing-based recommendation row, Top Picks, genre picks, Top Rated, Hidden Gems, Recently Added, Watch Again, and Watchlist discovery without duplicate Movies or Series rows.
+- Refreshes recommendation signals immediately after playback closes and then reconciles them with fresh Plex history.
 - Removes the redundant All titles shelf from Movie and Series row views in favor of personalized and genre shelves.
 - Moves contextual left/right shelf controls into the section heading, with the left arrow appearing only after moving right.
 - Keeps the mouse wheel dedicated to vertical page scrolling while shelf arrows control horizontal movement.
 - Adds an A–Z index plus direct letter-key jumping for Movies and Series, with a saved choice between a continuous grid and separate letter sections.
+- Matches Android series playback logic: Play starts the first episode, Resume returns to an in-progress episode, and completed episodes advance to the next unwatched episode.
 - Adds Ctrl+F search and documents the desktop shortcuts in Settings.
 - Preserves the redesigned interface, mini player, native libmpv playback, automatic recovery, and in-app updater from 1.0.3.
 
@@ -26,4 +28,4 @@ Users on 1.0.0 need to install a newer build manually once because 1.0.0 did not
 
 `Minova-Cinema-Desktop-1.0.4-Setup.exe`
 
-SHA-256: `A750196C7041DA48534FE872080ABF09F68C2DEB3D0F30C1AD771F812BD0874C`
+SHA-256: `8A830107F6756537A0D53BE4A919986915D0032C3771E1BBC64FE52814F68C46`

@@ -263,6 +263,54 @@ function demoCatalog() {
   };
 }
 
+function demoChildren(ratingKey) {
+  const catalog = demoCatalog();
+  const show = catalog.shows.find((item) => item.ratingKey === ratingKey);
+  if (show) {
+    return [{
+      ...show, ratingKey: `${show.ratingKey}-season-1`, title: 'Season 1', kind: 'season',
+      parentRatingKey: show.ratingKey, seasonNumber: 1, childCount: 3,
+      isWatched: false, viewedCount: show.viewedCount,
+    }];
+  }
+  const match = String(ratingKey).match(/^(demo-\d+)-season-(\d+)$/);
+  if (!match) return [];
+  const parent = catalog.shows.find((item) => item.ratingKey === match[1]);
+  if (!parent) return [];
+  return [1, 2, 3].map((number) => {
+    const inProgress = parent.ratingKey === 'demo-6' && number === 2;
+    const watched = parent.ratingKey === 'demo-6' && number === 1;
+    const progress = inProgress ? .42 : 0;
+    return {
+      ...parent,
+      ratingKey: `${ratingKey}-episode-${number}`,
+      title: `Episode ${number}`,
+      secondaryTitle: `${parent.title}  •  S1 E${number}`,
+      kind: 'episode',
+      parentRatingKey: ratingKey,
+      grandparentRatingKey: parent.ratingKey,
+      seasonNumber: Number(match[2]),
+      episodeNumber: number,
+      durationMs: 2700000,
+      viewOffsetMs: 2700000 * progress,
+      progress,
+      isWatched: watched,
+      viewedCount: watched ? 1 : 0,
+      lastViewedAt: inProgress || watched ? 1790700000 - number : null,
+    };
+  });
+}
+
+function demoDetails(ratingKey) {
+  const catalog = demoCatalog();
+  const libraryItem = [...catalog.movies, ...catalog.shows, ...catalog.continueWatching].find((item) => item.ratingKey === ratingKey);
+  if (libraryItem) return libraryItem;
+  const seasons = catalog.shows.flatMap((show) => demoChildren(show.ratingKey));
+  const season = seasons.find((item) => item.ratingKey === ratingKey);
+  if (season) return season;
+  return seasons.flatMap((item) => demoChildren(item.ratingKey)).find((item) => item.ratingKey === ratingKey) || null;
+}
+
 async function installMediaProtocol() {
   protocol.handle('minova-plex', async (request) => {
     try {
@@ -385,8 +433,8 @@ function registerIpc() {
     return true;
   });
   ipcMain.handle('catalog:load', () => demoMode ? demoCatalog() : requireClient().loadCatalog());
-  ipcMain.handle('media:details', (_event, key) => demoMode ? demoCatalog().movies.find((item) => item.ratingKey === key) || demoCatalog().shows[0] : requireClient().details(key));
-  ipcMain.handle('media:children', (_event, key) => demoMode ? demoCatalog().shows : requireClient().children(key));
+  ipcMain.handle('media:details', (_event, key) => demoMode ? demoDetails(key) : requireClient().details(key));
+  ipcMain.handle('media:children', (_event, key) => demoMode ? demoChildren(key) : requireClient().children(key));
   ipcMain.handle('media:collection', (_event, key) => demoMode ? demoCatalog().movies : requireClient().collection(key));
   ipcMain.handle('media:set-watched', (_event, { key, watched }) => demoMode || requireClient().setWatched(key, watched));
   ipcMain.handle('media:set-watchlisted', (_event, { providerRatingKey, watchlisted }) => demoMode || requireClient().setWatchlisted(providerRatingKey, watchlisted));
@@ -614,7 +662,10 @@ async function startNativePlayback(key, quality = 'original') {
   nativePlayer.on('ended', () => closeNativePlayback(true).catch(() => {}));
   await nativePlayer.start();
   syncPlayerOverlay();
-  return { native: true, ratingKey: item.ratingKey, title: item.title, kind: item.kind };
+  return {
+    native: true, ratingKey: item.ratingKey, title: item.title, kind: item.kind,
+    grandparentRatingKey: item.grandparentRatingKey || null,
+  };
 }
 
 async function closeNativePlayback(notifyRenderer) {
