@@ -1,6 +1,6 @@
 const { randomUUID } = require('node:crypto');
 
-const PRODUCT_VERSION = '1.0.2';
+const PRODUCT_VERSION = require('../package.json').version;
 const CLIENT_ID = 'MinovaCinemaDesktop';
 const PAGE_SIZE = 200;
 const TRUSTED_ARTWORK_DOMAINS = ['plex.tv', 'themoviedb.org', 'tmdb.org', 'thetvdb.com', 'fanart.tv'];
@@ -36,11 +36,11 @@ function normalizeServer(input) {
   return url.toString().replace(/\/$/, '');
 }
 
-function plexHeaders(token, extra = {}) {
+function plexHeaders(token, extra = {}, clientIdentifier = CLIENT_ID) {
   return {
     Accept: 'application/json',
     'X-Plex-Token': token,
-    'X-Plex-Client-Identifier': CLIENT_ID,
+    'X-Plex-Client-Identifier': clientIdentifier,
     'X-Plex-Product': 'Minova Cinema',
     'X-Plex-Version': PRODUCT_VERSION,
     'X-Plex-Platform': 'Windows',
@@ -166,16 +166,21 @@ function mapMetadata(metadata = {}) {
 }
 
 class PlexClient {
-  constructor(server, token) {
+  constructor(server, token, clientIdentifier = CLIENT_ID) {
     this.server = normalizeServer(server);
     this.token = token;
+    this.clientIdentifier = clientIdentifier;
   }
 
   async request(path, { method = 'GET', origin = this.server, extraHeaders = {} } = {}) {
     const url = /^https?:\/\//i.test(path) ? path : new URL(String(path).replace(/^\//, ''), `${origin}/`).toString();
     let response;
     try {
-      response = await fetch(url, { method, headers: plexHeaders(this.token, extraHeaders), signal: AbortSignal.timeout(45000) });
+      response = await fetch(url, {
+        method,
+        headers: plexHeaders(this.token, extraHeaders, this.clientIdentifier),
+        signal: AbortSignal.timeout(45000),
+      });
     } catch (error) {
       const target = new URL(url);
       throw new Error(connectionErrorMessage(error, target));
@@ -303,7 +308,7 @@ class PlexClient {
       mediaIndex: '0', partIndex: '0', protocol: 'hls', offset: '0', fastSeek: '1',
       directPlay: '0', directStream: '1', videoQuality: '100', videoResolution: profile[0],
       maxVideoBitrate: profile[1], subtitleSize: '100', audioBoost: '100', location: 'lan',
-      session: randomUUID(), 'X-Plex-Client-Identifier': CLIENT_ID, 'X-Plex-Product': 'Minova Cinema',
+      session: randomUUID(), 'X-Plex-Client-Identifier': this.clientIdentifier, 'X-Plex-Product': 'Minova Cinema',
       'X-Plex-Version': PRODUCT_VERSION, 'X-Plex-Platform': 'Windows', skipSubtitles: '1',
     });
     return `/video/:/transcode/universal/start.m3u8?${params}`;

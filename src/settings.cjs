@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { randomUUID } = require('node:crypto');
 
 function readSettings(file) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return {}; }
@@ -38,4 +39,13 @@ function selectConnectionToken(providedToken, rememberedToken) {
   return String(providedToken || '').trim() || String(rememberedToken || '').trim();
 }
 
-module.exports = { migrateLegacySettings, readSettings, selectConnectionToken, writeSettings };
+function ensureClientIdentifier(file) {
+  const settings = readSettings(file);
+  const existing = String(settings.clientIdentifier || '').trim();
+  if (existing) return existing;
+  const clientIdentifier = `MinovaCinemaDesktop-${randomUUID()}`;
+  writeSettings(file, { ...settings, clientIdentifier });
+  return clientIdentifier;
+}
+
+module.exports = { ensureClientIdentifier, migrateLegacySettings, readSettings, selectConnectionToken, writeSettings };

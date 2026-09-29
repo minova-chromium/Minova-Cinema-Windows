@@ -17,6 +17,8 @@ const state = {
   timelineTimer: null,
   catalogSyncedAt: 0,
   syncing: false,
+  manualSetup: false,
+  plexSignIn: { status: 'idle', code: '', authorizationUrl: '', servers: [], error: null },
   update: { status: 'idle', currentVersion: '', availableVersion: null, progress: 0, message: 'Automatic update checks are enabled.' },
 };
 let dismissedUpdateVersion = null;
@@ -283,14 +285,30 @@ function browsePage() {
 
 function onboarding() {
   const remembered = Boolean(state.config?.connected);
-  return `<div class="screen onboarding"><form id="connect-form" class="connect-card">${logoMarkup()}
+  const signIn = state.plexSignIn || { status: 'idle' };
+  const statusMarkup = (() => {
+    if (signIn.status === 'starting') return `<div class="plex-auth-panel"><span class="auth-spinner"></span><div><strong>Opening Plex sign-in…</strong><small>Requesting a secure link code.</small></div></div>`;
+    if (signIn.status === 'waiting') return `<div class="plex-auth-panel waiting"><span class="auth-code">${esc(signIn.code)}</span><div><strong>Finish signing in through Plex</strong><small>Your browser has opened. Approve Minova there, or enter code <b>${esc(signIn.code)}</b> at plex.tv/link.</small><div class="auth-actions"><button class="secondary" type="button" data-action="plex-open">Open Plex website</button><button class="secondary" type="button" data-action="plex-cancel">Cancel</button></div></div></div>`;
+    if (signIn.status === 'discovering') return `<div class="plex-auth-panel"><span class="auth-spinner"></span><div><strong>Finding your Plex servers…</strong><small>Sign-in was approved. Minova is checking the available connections.</small></div></div>`;
+    if (signIn.status === 'connecting') return `<div class="plex-auth-panel"><span class="auth-spinner"></span><div><strong>Connecting to ${esc(signIn.serverName)}…</strong><small>Testing the fastest available server address.</small></div></div>`;
+    if (signIn.status === 'select-server') return `<div class="plex-server-picker"><strong>Choose a Plex server</strong><small>Local connections are preferred automatically.</small>${signIn.servers.map((server) => `<button class="secondary plex-server-button" type="button" data-action="plex-select-server" data-server-id="${esc(server.id)}"><span>${esc(server.name)}</span><small>${server.owned ? 'Owned' : 'Shared'}</small></button>`).join('')}<button class="secondary" type="button" data-action="plex-cancel">Cancel</button></div>`;
+    return `<button class="primary plex-sign-in-button" type="button" data-action="plex-sign-in" autofocus>${signIn.status === 'error' ? 'Try Plex sign-in again' : 'Sign in with Plex'}</button>
+      <span class="plex-sign-in-note">Opens the official Plex website in your default browser. No Plex app or copied token required.</span>`;
+  })();
+  return `<div class="screen onboarding"><div class="connect-card">${logoMarkup()}
     <h1>Connect your Plex library</h1>
-    <p>Enter your Plex server and token once. Minova Cinema remembers them securely on this PC and reconnects automatically every time you open the app.</p>
-    <label class="field"><span>Plex server</span><input id="server" value="${esc(state.config?.server || '')}" placeholder="192.168.1.10:32400" autocomplete="url" required autofocus></label>
-    <label class="field"><span>X-Plex-Token</span><span class="token-row"><input id="token" type="password" placeholder="${remembered ? 'Saved securely — leave blank to reuse it' : 'Paste your Plex token'}" autocomplete="off" ${remembered ? '' : 'required'}><button class="secondary token-toggle" type="button" data-action="toggle-token" aria-label="Show Plex token">Show</button></span></label>
+    <p>Authorize Minova securely with Plex, then choose from the servers available to your account. Your selected connection is encrypted by Windows and restored automatically.</p>
+    ${statusMarkup}
+    ${signIn.status === 'error' ? `<p class="error">${esc(signIn.error)}</p>` : ''}
     ${state.error ? `<p class="error">${esc(state.error)}</p>` : ''}
-    <div class="connect-footer"><span class="connection-note">Windows encrypted &nbsp;•&nbsp; Auto reconnect &nbsp;•&nbsp; Direct Play</span><button class="primary connect-button" type="submit">Connect & remember</button></div>
-  </form></div>`;
+    <button class="manual-setup-toggle" type="button" data-action="toggle-manual">${state.manualSetup ? 'Hide advanced manual setup' : 'Advanced manual setup'}</button>
+    ${state.manualSetup ? `<form id="connect-form" class="manual-connect-form">
+      <p>For reverse proxies, Tailscale, or custom server addresses.</p>
+      <label class="field"><span>Plex server</span><input id="server" value="${esc(state.config?.server || '')}" placeholder="192.168.1.10:32400" autocomplete="url" required></label>
+      <label class="field"><span>X-Plex-Token</span><span class="token-row"><input id="token" type="password" placeholder="${remembered ? 'Saved securely — leave blank to reuse it' : 'Paste your Plex token'}" autocomplete="off" ${remembered ? '' : 'required'}><button class="secondary token-toggle" type="button" data-action="toggle-token" aria-label="Show Plex token">Show</button></span></label>
+      <div class="connect-footer"><span class="connection-note">Windows encrypted &nbsp;•&nbsp; Auto reconnect &nbsp;•&nbsp; Direct Play</span><button class="primary connect-button" type="submit">Connect manually</button></div>
+    </form>` : ''}
+  </div></div>`;
 }
 
 function loading(message = 'Loading your cinema…') {
@@ -609,6 +627,56 @@ async function connect(event) {
   }
 }
 
+async function startPlexSignIn() {
+  state.error = null;
+  state.plexSignIn = { status: 'starting', code: '', authorizationUrl: '', servers: [], error: null };
+  render();
+  try {
+    const challenge = await window.minova.plexSignIn.start();
+    state.plexSignIn = {
+      status: 'waiting',
+      code: challenge.code,
+      authorizationUrl: challenge.authorizationUrl,
+      servers: [],
+      error: null,
+    };
+    render();
+    const result = await window.minova.plexSignIn.awaitAuthorization();
+    if (result.status === 'select-server') {
+      state.plexSignIn = { ...state.plexSignIn, status: 'select-server', servers: result.servers };
+      render();
+      return;
+    }
+    state.plexSignIn = { ...state.plexSignIn, status: 'connecting', serverName: result.serverName || 'Plex' };
+    state.config = await window.minova.config();
+    await loadCatalog();
+  } catch (error) {
+    if (state.plexSignIn.status === 'idle') return;
+    state.plexSignIn = { ...state.plexSignIn, status: 'error', error: errorMessage(error) };
+    render();
+  }
+}
+
+async function selectPlexServer(serverId) {
+  const choice = state.plexSignIn.servers.find((server) => server.id === serverId);
+  state.plexSignIn = { ...state.plexSignIn, status: 'connecting', serverName: choice?.name || 'Plex' };
+  render();
+  try {
+    await window.minova.plexSignIn.selectServer(serverId);
+    state.config = await window.minova.config();
+    await loadCatalog();
+  } catch (error) {
+    state.plexSignIn = { ...state.plexSignIn, status: 'error', error: errorMessage(error) };
+    render();
+  }
+}
+
+async function cancelPlexSignIn() {
+  await window.minova.plexSignIn.cancel().catch(() => {});
+  state.plexSignIn = { status: 'idle', code: '', authorizationUrl: '', servers: [], error: null };
+  render();
+}
+
 async function loadCatalog() {
   state.loading = true; render();
   try {
@@ -621,7 +689,7 @@ async function loadCatalog() {
     else if (['settings', 'update-dialog'].includes(state.config.captureView)) state.route = { type: 'settings' };
     else if (state.config.captureView === 'detail') state.route = { type: 'detail', item: state.catalog.movies[0] || state.catalog.shows[0], children: [] };
     if (state.config.demoMode && state.config.captureView === 'update-dialog') {
-      state.update = { status: 'available', currentVersion: '1.0.2', availableVersion: '1.0.3', progress: 0, message: 'Minova Cinema 1.0.3 is available.' };
+      state.update = { status: 'available', currentVersion: '1.0.3', availableVersion: '1.0.4', progress: 0, message: 'Minova Cinema 1.0.4 is available.' };
     }
     render();
   } catch (error) {
@@ -712,6 +780,11 @@ document.addEventListener('click', async (event) => {
   else if (action === 'back') goBack();
   else if (action === 'settings') pushRoute({ type: 'settings' });
   else if (action === 'fullscreen') window.minova.fullscreen();
+  else if (action === 'plex-sign-in') startPlexSignIn();
+  else if (action === 'plex-open') window.minova.openExternal(state.plexSignIn.authorizationUrl);
+  else if (action === 'plex-cancel') cancelPlexSignIn();
+  else if (action === 'plex-select-server') selectPlexServer(target.dataset.serverId);
+  else if (action === 'toggle-manual') { state.manualSetup = !state.manualSetup; render(); }
   else if (action === 'sync') await syncCatalog(target);
   else if (action === 'check-update') {
     try {
@@ -747,7 +820,7 @@ document.addEventListener('click', async (event) => {
     state.config.enhancement = document.getElementById('enhancement').value;
     await window.minova.savePreferences({ quality: state.config.quality, enhancement: state.config.enhancement }); showToast('Native playback settings saved.');
   } else if (action === 'disconnect') {
-    await window.minova.disconnect(); state.config = await window.minova.config(); state.catalog = null; state.routeStack = []; state.route = { type: 'browse' }; render();
+    await window.minova.disconnect(); state.config = await window.minova.config(); state.catalog = null; state.routeStack = []; state.route = { type: 'browse' }; state.plexSignIn = { status: 'idle', code: '', authorizationUrl: '', servers: [], error: null }; render();
   } else if (action === 'watched') {
     try { await window.minova.setWatched(key, target.dataset.value === 'true'); showToast('Plex watched state updated.'); await loadCatalog(); }
     catch (error) { showToast(errorMessage(error)); }
@@ -937,7 +1010,7 @@ window.__runMinovaQa = async function runMinovaQa() {
   check('Settings dashboard uses two columns', getComputedStyle(document.querySelector('.settings-grid')).gridTemplateColumns.split(' ').length === 2, getComputedStyle(document.querySelector('.settings-grid')).gridTemplateColumns);
   const previousUpdate = state.update;
   dismissedUpdateVersion = null;
-  state.update = { status: 'available', currentVersion: '1.0.2', availableVersion: '1.0.3', progress: 0, message: 'Minova Cinema 1.0.3 is available.' };
+  state.update = { status: 'available', currentVersion: '1.0.3', availableVersion: '1.0.4', progress: 0, message: 'Minova Cinema 1.0.4 is available.' };
   refreshUpdateDialog();
   check('GitHub update opens the branded in-app dialog', !document.getElementById('update-dialog').hidden, document.getElementById('update-dialog-title').textContent);
   check('Update dialog offers Update and Not now', Boolean(document.querySelector('#update-dialog [data-action="install-update"]')) && Boolean(document.querySelector('#update-dialog [data-action="dismiss-update"]')), document.querySelector('.update-dialog-actions')?.textContent.trim());
@@ -964,6 +1037,10 @@ window.__runMinovaQa = async function runMinovaQa() {
 };
 
 window.__runMinovaPersistenceSave = async function runMinovaPersistenceSave(server, token) {
+  if (!document.getElementById('connect-form')) {
+    document.querySelector('[data-action="toggle-manual"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 40));
+  }
   const form = document.getElementById('connect-form');
   if (!form) return { connected: false, browse: false, error: 'Onboarding form was not shown.' };
   const focusSequence = [];
@@ -1007,6 +1084,19 @@ window.__runMinovaPersistenceCheck = async function runMinovaPersistenceCheck() 
     onboarding: Boolean(document.getElementById('connect-form')),
     error: state.error,
   };
+};
+
+window.__showPlexSignInPreview = function showPlexSignInPreview(status) {
+  state.plexSignIn = status === 'select-server'
+    ? {
+      status: 'select-server', code: 'A1B2', authorizationUrl: 'https://plex.tv/link/?pin=A1B2', error: null,
+      servers: [
+        { id: 'living-room', name: 'Living Room Plex', owned: true },
+        { id: 'family', name: 'Family Shared Server', owned: false },
+      ],
+    }
+    : { status: 'waiting', code: 'A1B2', authorizationUrl: 'https://plex.tv/link/?pin=A1B2', servers: [], error: null };
+  render();
 };
 
 window.addEventListener('focus', () => {

@@ -99,7 +99,7 @@ class NativeMpvPlayer extends EventEmitter {
     this.socket.on('error', (error) => { if (!this.closed) this.fail(error.message); });
     this.socket.on('close', () => { if (!this.closed) this.fail('The native player connection closed unexpectedly.'); });
 
-    await this.command(['set_property', 'http-header-fields', `X-Plex-Token: ${this.client.token},X-Plex-Client-Identifier: MinovaCinemaDesktop,X-Plex-Product: Minova Cinema`]);
+    await this.command(['set_property', 'http-header-fields', `X-Plex-Token: ${this.client.token},X-Plex-Client-Identifier: ${this.client.clientIdentifier || 'MinovaCinemaDesktop'},X-Plex-Product: Minova Cinema`]);
     await this.command(['set_property', 'volume', this.volume]);
     await this.observe();
     await this.applyEnhancement(this.enhancement);

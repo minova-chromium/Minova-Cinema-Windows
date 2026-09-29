@@ -3,8 +3,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { autoUpdater } = require('electron-updater');
 const { PlexClient, isPlexOwnedHost, isTrustedExternalArtworkUrl, normalizeServer, plexHeaders, rewritePlaylist } = require('./plex.cjs');
+const { awaitPlexAuthorization, createPlexPin, discoverPlexServers } = require('./plex-auth.cjs');
 const { NativeMpvPlayer, mediaUrl } = require('./native-player.cjs');
-const { migrateLegacySettings, readSettings, selectConnectionToken, writeSettings } = require('./settings.cjs');
+const { ensureClientIdentifier, migrateLegacySettings, readSettings, selectConnectionToken, writeSettings } = require('./settings.cjs');
 const { miniPlayerBounds } = require('./window-modes.cjs');
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'minova-plex', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true } }]);
@@ -16,6 +17,7 @@ let closingPlayerOverlay = false;
 let miniPlayerRestoreState = null;
 let miniPlayerPinned = false;
 let activeClient;
+let pendingPlexSignIn;
 let updateTimer;
 let updateAccepted = false;
 let updateState = {
@@ -56,6 +58,8 @@ function migratePreviousDesktopProfile() {
     path.join(appData, 'Minova Cinema Desktop', 'settings.json'),
   ]);
 }
+
+function getClientIdentifier() { return ensureClientIdentifier(configPath()); }
 
 function publishUpdateState(patch = {}) {
   updateState = { ...updateState, ...patch, currentVersion: app.getVersion() };
@@ -153,16 +157,27 @@ function getConnection() {
   if (!stored.server || !stored.encryptedToken) return null;
   try {
     const token = safeStorage.decryptString(Buffer.from(stored.encryptedToken, 'base64'));
-    return { server: stored.server, token, quality: stored.quality || 'original' };
+    return {
+      server: stored.server,
+      token,
+      quality: stored.quality || 'original',
+      clientIdentifier: stored.clientIdentifier || getClientIdentifier(),
+    };
   } catch { return null; }
 }
 
-function saveConnection(server, token, quality = 'original') {
+function saveConnection(server, token, quality = 'original', clientIdentifier = getClientIdentifier()) {
   if (!safeStorage.isEncryptionAvailable()) throw new Error('Windows secure credential storage is not available.');
   const normalized = normalizeServer(server);
   const stored = readStored();
-  writeStored({ ...stored, server: normalized, encryptedToken: safeStorage.encryptString(token).toString('base64'), quality });
-  activeClient = new PlexClient(normalized, token);
+  writeStored({
+    ...stored,
+    server: normalized,
+    encryptedToken: safeStorage.encryptString(token).toString('base64'),
+    quality,
+    clientIdentifier,
+  });
+  activeClient = new PlexClient(normalized, token, clientIdentifier);
   return normalized;
 }
 
@@ -170,8 +185,34 @@ function requireClient() {
   if (activeClient) return activeClient;
   const connection = getConnection();
   if (!connection) throw new Error('Connect a Plex server first.');
-  activeClient = new PlexClient(connection.server, connection.token);
+  activeClient = new PlexClient(connection.server, connection.token, connection.clientIdentifier);
   return activeClient;
+}
+
+function cancelPlexSignIn() {
+  pendingPlexSignIn?.controller?.abort();
+  pendingPlexSignIn = null;
+}
+
+async function connectDiscoveredServer(server) {
+  if (!server) throw new Error('That Plex server is no longer available. Sign in again.');
+  const clientIdentifier = getClientIdentifier();
+  let lastError;
+  for (const connection of server.connections) {
+    try {
+      const candidate = new PlexClient(connection.uri, server.accessToken, clientIdentifier);
+      const serverName = await candidate.test();
+      const normalized = saveConnection(
+        connection.uri,
+        server.accessToken,
+        readStored().quality || 'original',
+        clientIdentifier,
+      );
+      pendingPlexSignIn = null;
+      return { status: 'connected', server: normalized, serverName };
+    } catch (error) { lastError = error; }
+  }
+  throw new Error(lastError?.message || `${server.name} was found, but none of its addresses could be reached.`);
 }
 
 function proxyUrl(target) {
@@ -229,7 +270,7 @@ async function installMediaProtocol() {
       const isServerMedia = target.origin === serverOrigin;
       if (!isServerMedia && !isTrustedExternalArtworkUrl(target.toString())) return new Response('Blocked media origin', { status: 403 });
       const headers = isServerMedia || isPlexOwnedHost(target.hostname)
-        ? plexHeaders(connection.token)
+        ? plexHeaders(connection.token, {}, connection.clientIdentifier)
         : { Accept: 'image/*' };
       const range = request.headers.get('range');
       if (range) headers.Range = range;
@@ -263,13 +304,53 @@ function registerIpc() {
     };
   });
   ipcMain.handle('config:connect', async (_event, { server, token }) => {
+    cancelPlexSignIn();
     const remembered = getConnection();
     const effectiveToken = selectConnectionToken(token, remembered?.token);
     if (!effectiveToken) throw new Error('Enter your Plex token.');
-    const candidate = new PlexClient(server, effectiveToken);
+    const clientIdentifier = getClientIdentifier();
+    const candidate = new PlexClient(server, effectiveToken, clientIdentifier);
     const serverName = await candidate.test();
-    const normalized = saveConnection(server, effectiveToken, readStored().quality || 'original');
+    const normalized = saveConnection(server, effectiveToken, readStored().quality || 'original', clientIdentifier);
     return { server: normalized, serverName };
+  });
+  ipcMain.handle('plex-auth:start', async () => {
+    cancelPlexSignIn();
+    const controller = new AbortController();
+    const clientIdentifier = getClientIdentifier();
+    const challenge = await createPlexPin({ clientIdentifier, signal: controller.signal });
+    pendingPlexSignIn = { controller, clientIdentifier, challenge, servers: [] };
+    await shell.openExternal(challenge.authorizationUrl);
+    return challenge;
+  });
+  ipcMain.handle('plex-auth:await', async () => {
+    const pending = pendingPlexSignIn;
+    if (!pending) throw new Error('Start Plex sign-in again to request a new code.');
+    const accountToken = await awaitPlexAuthorization({
+      pinId: pending.challenge.id,
+      clientIdentifier: pending.clientIdentifier,
+      signal: pending.controller.signal,
+    });
+    const servers = await discoverPlexServers({
+      accountToken,
+      clientIdentifier: pending.clientIdentifier,
+      signal: pending.controller.signal,
+    });
+    if (!servers.length) throw new Error('Plex sign-in succeeded, but this account has no available Plex Media Server.');
+    pending.servers = servers;
+    if (servers.length === 1) return connectDiscoveredServer(servers[0]);
+    return {
+      status: 'select-server',
+      servers: servers.map(({ id, name, owned }) => ({ id, name, owned })),
+    };
+  });
+  ipcMain.handle('plex-auth:select-server', (_event, serverId) => {
+    const server = pendingPlexSignIn?.servers?.find((candidate) => candidate.id === serverId);
+    return connectDiscoveredServer(server);
+  });
+  ipcMain.handle('plex-auth:cancel', () => {
+    cancelPlexSignIn();
+    return true;
   });
   ipcMain.handle('config:save-preferences', (_event, preferences) => {
     const stored = readStored();
@@ -283,7 +364,11 @@ function registerIpc() {
   });
   ipcMain.handle('config:disconnect', () => {
     activeClient = null;
-    try { fs.unlinkSync(configPath()); } catch {}
+    cancelPlexSignIn();
+    const stored = readStored();
+    delete stored.server;
+    delete stored.encryptedToken;
+    writeStored({ ...stored, clientIdentifier: stored.clientIdentifier || getClientIdentifier() });
     return true;
   });
   ipcMain.handle('catalog:load', () => demoMode ? demoCatalog() : requireClient().loadCatalog());
@@ -635,6 +720,12 @@ function createWindow() {
       if (captureView === 'grid-click') {
         await mainWindow.webContents.executeJavaScript("document.querySelector('[data-action=\"layout\"]')?.click()");
         await new Promise((resolve) => setTimeout(resolve, 250));
+      } else if (captureView === 'plex-signin-waiting') {
+        await mainWindow.webContents.executeJavaScript("window.__showPlexSignInPreview?.('waiting')");
+        await new Promise((resolve) => setTimeout(resolve, 120));
+      } else if (captureView === 'plex-server-picker') {
+        await mainWindow.webContents.executeJavaScript("window.__showPlexSignInPreview?.('select-server')");
+        await new Promise((resolve) => setTimeout(resolve, 120));
       }
       const image = await mainWindow.capturePage();
       fs.mkdirSync(path.dirname(capturePath), { recursive: true });

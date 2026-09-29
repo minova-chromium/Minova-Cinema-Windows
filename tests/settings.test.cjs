@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { migrateLegacySettings, readSettings, selectConnectionToken, writeSettings } = require('../src/settings.cjs');
+const { ensureClientIdentifier, migrateLegacySettings, readSettings, selectConnectionToken, writeSettings } = require('../src/settings.cjs');
 
 test('migrates a remembered encrypted login from the old Electron profile', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'minova-settings-'));
@@ -45,4 +45,18 @@ test('reuses an encrypted remembered token when only the server address changes'
   assert.equal(selectConnectionToken('', 'remembered-token'), 'remembered-token');
   assert.equal(selectConnectionToken('  new-token  ', 'remembered-token'), 'new-token');
   assert.equal(selectConnectionToken('', ''), '');
+});
+
+test('creates one stable per-install Plex client identifier', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'minova-settings-'));
+  try {
+    const file = path.join(root, 'settings.json');
+    const first = ensureClientIdentifier(file);
+    const second = ensureClientIdentifier(file);
+    assert.match(first, /^MinovaCinemaDesktop-[0-9a-f-]{36}$/i);
+    assert.equal(second, first);
+    assert.equal(readSettings(file).clientIdentifier, first);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });

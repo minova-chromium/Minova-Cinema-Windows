@@ -3,6 +3,12 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('minova', {
   config: () => ipcRenderer.invoke('config:get'),
   connect: (server, token) => ipcRenderer.invoke('config:connect', { server, token }),
+  plexSignIn: {
+    start: () => ipcRenderer.invoke('plex-auth:start'),
+    awaitAuthorization: () => ipcRenderer.invoke('plex-auth:await'),
+    selectServer: (serverId) => ipcRenderer.invoke('plex-auth:select-server', serverId),
+    cancel: () => ipcRenderer.invoke('plex-auth:cancel'),
+  },
   savePreferences: (preferences) => ipcRenderer.invoke('config:save-preferences', preferences),
   disconnect: () => ipcRenderer.invoke('config:disconnect'),
   loadCatalog: () => ipcRenderer.invoke('catalog:load'),
