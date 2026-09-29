@@ -180,12 +180,16 @@ function collectionCard(item) {
 function header() {
   const showLayout = state.route.type === 'browse' && ['movies', 'series', 'watchlist'].includes(state.tab);
   const layoutLabel = state.layout === 'rows' ? 'Switch to grid view' : 'Switch to row view';
+  const primaryTabs = tabs.filter(([id]) => id !== 'search');
   return `<header class="topbar">
     <div class="top-brand">${logoMarkup('compact')}</div>
     <nav class="nav" aria-label="Main navigation">
-      ${tabs.map(([id, label]) => `<button class="nav-button ${id === 'search' ? 'nav-icon' : ''} ${state.tab === id ? 'active' : ''}" data-action="tab" data-tab="${id}" aria-label="${id === 'search' ? 'Search' : label}">${label}</button>`).join('')}
-      ${showLayout ? `<button class="nav-button nav-icon layout-button" data-action="layout" aria-label="${layoutLabel}" title="${layoutLabel}">${state.layout === 'rows' ? '▦' : '☰'}</button>` : ''}
-      <button class="nav-button nav-icon ${state.route.type === 'settings' ? 'active' : ''}" data-action="settings" aria-label="Settings">⚙</button>
+      <div class="nav-primary">${primaryTabs.map(([id, label]) => `<button class="nav-button ${state.tab === id ? 'active' : ''}" data-action="tab" data-tab="${id}" aria-label="${label}">${label}</button>`).join('')}</div>
+      <div class="nav-tools" aria-label="View and application tools">
+        <button class="nav-button nav-icon ${state.tab === 'search' ? 'active' : ''}" data-action="tab" data-tab="search" aria-label="Search" title="Search (Ctrl+F)">⌕</button>
+        ${showLayout ? `<button class="nav-button nav-icon layout-button" data-action="layout" aria-label="${layoutLabel}" title="${layoutLabel}">${state.layout === 'rows' ? '▦' : '☰'}</button>` : ''}
+        <button class="nav-button nav-icon ${state.route.type === 'settings' ? 'active' : ''}" data-action="settings" aria-label="Settings">⚙</button>
+      </div>
     </nav>
   </header>`;
 }
@@ -206,7 +210,12 @@ function heroMarkup(item, index = 0, count = 0) {
 
 function shelf(title, items, landscape = false) {
   if (!items?.length) return '';
-  return `<section class="section"><h2 class="section-title">${esc(title)}</h2><div class="rail">${items.slice(0, 40).map((item) => card(item, { landscape })).join('')}</div></section>`;
+  const visibleItems = items.slice(0, 80);
+  return `<section class="section"><div class="section-heading"><h2 class="section-title">${esc(title)}</h2><span>${visibleItems.length} ${visibleItems.length === 1 ? 'title' : 'titles'}</span></div><div class="rail-shell">
+    <button class="rail-arrow rail-arrow-left is-hidden" type="button" data-action="rail-scroll" data-direction="-1" tabindex="-1" aria-label="Scroll ${esc(title)} left">‹</button>
+    <div class="rail">${visibleItems.map((item) => card(item, { landscape })).join('')}</div>
+    <button class="rail-arrow rail-arrow-right" type="button" data-action="rail-scroll" data-direction="1" tabindex="-1" aria-label="Scroll ${esc(title)} right">›</button>
+  </div></section>`;
 }
 
 function homeShelves() {
@@ -224,26 +233,53 @@ function homeShelves() {
 }
 
 function genresFor(items) {
-  return [...new Set(items.flatMap((item) => item.genres || []))].sort((a, b) => a.localeCompare(b));
+  return [...new Set(items.flatMap((item) => item.genres || []).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+}
+
+function sortAlphabetically(items) {
+  return [...items].sort((left, right) => String(left.title || '').localeCompare(String(right.title || ''), undefined, {
+    numeric: true,
+    sensitivity: 'base',
+  }));
+}
+
+function alphabetLetter(item) {
+  const first = String(item?.title || '').trim().charAt(0).toUpperCase();
+  return /^[A-Z]$/.test(first) ? first : '#';
+}
+
+function alphabeticalGrid(items) {
+  const groups = new Map();
+  for (const item of sortAlphabetically(items)) {
+    const letter = alphabetLetter(item);
+    if (!groups.has(letter)) groups.set(letter, []);
+    groups.get(letter).push(item);
+  }
+  const letters = [...groups.keys()].sort((left, right) => left === '#' ? 1 : right === '#' ? -1 : left.localeCompare(right));
+  const index = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((letter) => `<button type="button" data-action="alpha-jump" data-letter="${letter}" ${groups.has(letter) ? '' : 'disabled'} aria-label="Jump to ${letter}">${letter}</button>`).join('');
+  return `<div class="alphabetical-layout"><div class="alphabetical-groups">${letters.map((letter) => {
+    const group = groups.get(letter);
+    return `<section class="alpha-group" data-alpha-group="${letter}"><div class="alpha-heading"><h2>${letter}</h2><span>${group.length} ${group.length === 1 ? 'title' : 'titles'}</span></div><div class="grid">${group.map((item) => card(item)).join('')}</div></section>`;
+  }).join('')}</div><aside class="alpha-index" aria-label="Alphabetical jump">${index}</aside></div>`;
 }
 
 function rowsFor(items) {
   const genres = genresFor(items);
-  const chosen = state.genre ? genres.filter((genre) => genre === state.genre) : genres.slice(0, 8);
-  const result = [];
-  result.push(shelf(state.genre || 'All titles', items));
-  for (const genre of chosen) {
+  if (state.genre) return shelf(state.genre, sortAlphabetically(items.filter((item) => item.genres?.includes(state.genre))));
+  const result = [shelf('All titles', sortAlphabetically(items))];
+  for (const genre of genres) {
     const matching = items.filter((item) => item.genres?.includes(genre));
-    if (matching.length >= 2 && (state.genre || genre !== chosen[0])) result.push(shelf(genre, matching));
+    if (matching.length) result.push(shelf(genre, sortAlphabetically(matching)));
   }
   return result.join('');
 }
 
 function toolbar(title, items) {
   const genres = genresFor(items);
-  return `<div class="toolbar"><h1>${esc(title)}</h1>
-    <button class="chip ${!state.genre ? 'active' : ''}" data-action="genre" data-genre="">All genres</button>
-    ${genres.slice(0, 4).map((genre) => `<button class="chip ${state.genre === genre ? 'active' : ''}" data-action="genre" data-genre="${esc(genre)}">${esc(genre)}</button>`).join('')}
+  const filteredCount = state.genre ? items.filter((item) => item.genres?.includes(state.genre)).length : items.length;
+  const countLabel = state.genre ? `${filteredCount} of ${items.length} titles` : `${items.length} ${items.length === 1 ? 'title' : 'titles'}`;
+  return `<div class="toolbar"><div class="toolbar-title"><h1>${esc(title)}</h1><span>${countLabel} · ${state.layout === 'grid' ? 'A–Z grid' : 'genre rows'}</span></div>
+    <label class="genre-filter"><span>Genre</span><select id="genre-filter" aria-label="Filter by genre"><option value="">All genres</option>${genres.map((genre) => `<option value="${esc(genre)}" ${state.genre === genre ? 'selected' : ''}>${esc(genre)}</option>`).join('')}</select></label>
   </div>`;
 }
 
@@ -277,7 +313,7 @@ function browsePage() {
     const filtered = state.genre ? items.filter((item) => item.genres?.includes(state.genre)) : items;
     const title = state.tab === 'movies' ? 'Movies' : state.tab === 'series' ? 'Series' : 'Watchlist';
     body = `<div class="browse-scroll">${toolbar(title, items)}${state.layout === 'grid'
-      ? `<div class="grid">${filtered.map((item) => card(item)).join('')}</div>` : rowsFor(filtered)}
+      ? (['movies', 'series'].includes(state.tab) ? alphabeticalGrid(filtered) : `<div class="grid">${sortAlphabetically(filtered).map((item) => card(item)).join('')}</div>`) : rowsFor(items)}
       ${filtered.length ? '' : `<div class="empty">No ${title.toLowerCase()} were found.</div>`}</div>`;
   }
   return `<div class="screen app-shell">${header()}<div class="content">${body}</div></div>`;
@@ -347,7 +383,7 @@ function settingsPage() {
         <small class="update-version" data-update-version>Installed version ${esc(state.update?.currentVersion || '—')} · Updates from GitHub Releases</small>
       </section>
       <section class="settings-card controls-card"><div class="settings-card-head"><span class="settings-icon">⌨</span><div><span class="settings-kicker">Navigation</span><h2>Desktop controls</h2></div></div>
-        <div class="shortcut-grid"><div><kbd>← ↑ ↓ →</kbd><span>Move</span></div><div><kbd>Enter</kbd><span>Select</span></div><div><kbd>Esc</kbd><span>Back</span></div><div><kbd>F11</kbd><span>Full screen</span></div></div>
+        <div class="shortcut-grid"><div><kbd>← ↑ ↓ →</kbd><span>Move</span></div><div><kbd>Enter</kbd><span>Select</span></div><div><kbd>A–Z</kbd><span>Jump in grid</span></div><div><kbd>Ctrl + F</kbd><span>Search</span></div><div><kbd>Esc</kbd><span>Back</span></div><div><kbd>F11</kbd><span>Full screen</span></div></div>
       </section>
     </div>
     <p class="settings-footer">Minova Cinema Desktop · Your library stays between this PC and Plex.</p>
@@ -404,6 +440,11 @@ function render() {
 
 function bindPage() {
   document.getElementById('connect-form')?.addEventListener('submit', connect);
+  document.getElementById('genre-filter')?.addEventListener('change', (event) => {
+    state.genre = event.target.value || null;
+    render();
+    requestAnimationFrame(() => document.getElementById('genre-filter')?.focus({ preventScroll: true }));
+  });
   document.getElementById('search-input')?.addEventListener('input', (event) => {
     state.search = event.target.value;
     const all = [...state.catalog.movies, ...state.catalog.shows];
@@ -417,12 +458,60 @@ function bindPage() {
     if (state.tab === 'home' && item) updateHero(item);
     node.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
   }));
+  document.querySelectorAll('.rail-shell').forEach((shell) => {
+    const rail = shell.querySelector('.rail');
+    if (!rail) return;
+    const refresh = () => updateRailArrows(shell);
+    rail.addEventListener('scroll', refresh, { passive: true });
+    rail.addEventListener('wheel', (event) => {
+      if (rail.scrollWidth <= rail.clientWidth + 2 || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+      event.preventDefault();
+      rail.scrollBy({ left: event.deltaY, behavior: 'auto' });
+    }, { passive: false });
+    requestAnimationFrame(refresh);
+  });
   const autofocus = document.querySelector('[autofocus]');
   if (autofocus) autofocus.focus();
   else if (document.activeElement === document.body) initialFocus()?.focus();
   requestAnimationFrame(() => {
     if (document.activeElement === document.body) initialFocus()?.focus();
   });
+}
+
+function updateRailArrows(shell) {
+  const rail = shell?.querySelector('.rail');
+  if (!rail) return;
+  const left = shell.querySelector('.rail-arrow-left');
+  const right = shell.querySelector('.rail-arrow-right');
+  const maximum = Math.max(0, rail.scrollWidth - rail.clientWidth);
+  const canGoLeft = rail.scrollLeft > 6;
+  const canGoRight = maximum - rail.scrollLeft > 6;
+  left?.classList.toggle('is-hidden', !canGoLeft);
+  right?.classList.toggle('is-hidden', !canGoRight);
+  if (left) left.disabled = !canGoLeft;
+  if (right) right.disabled = !canGoRight;
+}
+
+function scrollRail(button) {
+  const shell = button.closest('.rail-shell');
+  const rail = shell?.querySelector('.rail');
+  if (!rail) return;
+  const direction = Number(button.dataset.direction) || 1;
+  rail.scrollBy({ left: direction * Math.max(280, rail.clientWidth * .82), behavior: 'smooth' });
+  setTimeout(() => updateRailArrows(shell), 360);
+}
+
+function jumpToLetter(letter) {
+  const normalized = String(letter || '').toUpperCase();
+  const group = [...document.querySelectorAll('[data-alpha-group]')].find((node) => node.dataset.alphaGroup === normalized);
+  if (!group) {
+    showToast(`No ${state.tab === 'series' ? 'series' : 'movies'} beginning with ${normalized}.`);
+    return false;
+  }
+  group.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  const first = group.querySelector('.media-card');
+  setTimeout(() => first?.focus({ preventScroll: true }), 180);
+  return true;
 }
 
 function visibleElements(selector, root = document) {
@@ -473,7 +562,7 @@ function navigateRail(active, key) {
       const previousCards = visibleElements('.media-card, .credit-card[tabindex="0"]', rails[railIndex - 1]);
       return focusNode(closestHorizontal(previousCards, active));
     }
-    return focusNode(document.querySelector('.hero .primary, .hero .secondary, .toolbar .chip')) || focusHeaderFor(active);
+    return focusNode(document.querySelector('.hero .primary, .hero .secondary, #genre-filter')) || focusHeaderFor(active);
   }
   if (key === 'ArrowDown' && railIndex >= 0 && railIndex < rails.length - 1) {
     const nextCards = visibleElements('.media-card, .credit-card[tabindex="0"]', rails[railIndex + 1]);
@@ -488,8 +577,19 @@ function navigateGrid(active, key) {
   const cards = visibleElements('.media-card', grid);
   const index = cards.indexOf(active);
   if (index < 0) return false;
-  if (key === 'ArrowLeft') return focusNode(cards[index - 1]);
-  if (key === 'ArrowRight') return focusNode(cards[index + 1]);
+  const group = active.closest('.alpha-group');
+  const groups = group ? visibleElements('.alpha-group') : [];
+  const groupIndex = groups.indexOf(group);
+  if (key === 'ArrowLeft') {
+    if (index > 0) return focusNode(cards[index - 1]);
+    if (groupIndex > 0) return focusNode(visibleElements('.media-card', groups[groupIndex - 1]).at(-1));
+    return false;
+  }
+  if (key === 'ArrowRight') {
+    if (index < cards.length - 1) return focusNode(cards[index + 1]);
+    if (groupIndex >= 0 && groupIndex < groups.length - 1) return focusNode(visibleElements('.media-card', groups[groupIndex + 1])[0]);
+    return false;
+  }
   const activeRect = active.getBoundingClientRect();
   const rows = [];
   for (const cardNode of cards) {
@@ -502,11 +602,18 @@ function navigateGrid(active, key) {
   const rowIndex = rows.findIndex((row) => row.nodes.includes(active));
   if (key === 'ArrowUp') {
     if (rowIndex > 0) return focusNode(closestHorizontal(rows[rowIndex - 1].nodes, active));
+    if (groupIndex > 0) {
+      const previous = visibleElements('.media-card', groups[groupIndex - 1]);
+      return focusNode(closestHorizontal(previous.slice(-Math.max(1, rows[0]?.nodes.length || 1)), active));
+    }
     if (grid.id === 'search-results') return focusNode(document.getElementById('search-input'));
-    return focusNode(document.querySelector('.toolbar .chip')) || focusHeaderFor(active);
+    return focusNode(document.getElementById('genre-filter')) || focusHeaderFor(active);
   }
   if (key === 'ArrowDown' && rowIndex < rows.length - 1) {
     return focusNode(closestHorizontal(rows[rowIndex + 1].nodes, active));
+  }
+  if (key === 'ArrowDown' && groupIndex >= 0 && groupIndex < groups.length - 1) {
+    return focusNode(closestHorizontal(visibleElements('.media-card', groups[groupIndex + 1]), active));
   }
   return false;
 }
@@ -544,6 +651,7 @@ function navigateDpad(key) {
     }
     if (key === 'ArrowDown') {
       if (active.id === 'quality') return focusNode(document.getElementById('enhancement'));
+      if (active.id === 'genre-filter') return focusNode(document.querySelector('.grid .media-card, .rail .media-card'));
       return focusNode(document.querySelector('.settings-page button'));
     }
     if (key === 'ArrowLeft' || key === 'ArrowRight') {
@@ -566,7 +674,7 @@ function navigateDpad(key) {
       if (state.tab === 'home') return focusNode(document.querySelector('.home-shelves .media-card'));
       if (state.tab === 'search') return focusNode(document.getElementById('search-input'));
       if (state.tab === 'collections') return focusNode(document.querySelector('.collections-page .media-card'));
-      return focusNode(document.querySelector('.toolbar .chip, .grid .media-card, .rail .media-card'));
+      return focusNode(document.querySelector('#genre-filter, .grid .media-card, .rail .media-card'));
     }
     return false;
   }
@@ -785,6 +893,8 @@ document.addEventListener('click', async (event) => {
   else if (action === 'plex-cancel') cancelPlexSignIn();
   else if (action === 'plex-select-server') selectPlexServer(target.dataset.serverId);
   else if (action === 'toggle-manual') { state.manualSetup = !state.manualSetup; render(); }
+  else if (action === 'rail-scroll') scrollRail(target);
+  else if (action === 'alpha-jump') jumpToLetter(target.dataset.letter);
   else if (action === 'sync') await syncCatalog(target);
   else if (action === 'check-update') {
     try {
@@ -859,12 +969,28 @@ document.addEventListener('keydown', (event) => {
     if (['ArrowLeft', 'ArrowUp'].includes(event.key)) { event.preventDefault(); controls[Math.max(0, index - 1)]?.focus(); return; }
     if (['ArrowRight', 'ArrowDown'].includes(event.key)) { event.preventDefault(); controls[Math.min(controls.length - 1, Math.max(0, index + 1))]?.focus(); return; }
   }
+  const editing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName) || document.activeElement?.isContentEditable;
+  if (!editing && ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f' || (!event.ctrlKey && !event.metaKey && event.key === '/'))) {
+    event.preventDefault();
+    state.tab = 'search'; state.genre = null; state.route = { type: 'browse' }; render();
+    return;
+  }
+  if (!editing && !event.ctrlKey && !event.metaKey && !event.altKey && /^[a-z]$/i.test(event.key)
+    && state.route.type === 'browse' && state.layout === 'grid' && ['movies', 'series'].includes(state.tab)) {
+    event.preventDefault();
+    jumpToLetter(event.key);
+    return;
+  }
   if (event.key === 'F11') { event.preventDefault(); window.minova.fullscreen(); return; }
   if ((event.key === 'Escape' || event.key === 'Backspace') && !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) {
     if (state.route.type !== 'browse') { event.preventDefault(); goBack(); }
     return;
   }
   if (event.key.startsWith('Arrow') && navigateDpad(event.key)) event.preventDefault();
+});
+
+window.addEventListener('resize', () => {
+  document.querySelectorAll('.rail-shell').forEach((shell) => updateRailArrows(shell));
 });
 
 function renderWindowState(windowState = {}) {
@@ -933,17 +1059,23 @@ window.__runMinovaQa = async function runMinovaQa() {
   check('Right moves Home to Movies', document.activeElement?.dataset?.tab === 'movies', activeLabel());
   document.activeElement?.click(); await wait(120);
   check('Enter/click opens Movies', state.tab === 'movies' && Boolean(document.querySelector('.toolbar')), state.tab);
+  const desktopTools = document.querySelector('.nav-tools');
+  check('Search, layout, and Settings are grouped on the right', Boolean(desktopTools?.querySelector('[data-tab="search"]')) && Boolean(desktopTools?.querySelector('[data-action="layout"]')) && Boolean(desktopTools?.querySelector('[data-action="settings"]')), desktopTools?.textContent.trim() || 'missing');
+  check('Genre selector exposes every available genre', document.querySelectorAll('#genre-filter option').length === genresFor(state.catalog.movies).length + 1, document.querySelectorAll('#genre-filter option').length);
   const headerLayout = document.querySelector('.topbar [data-action="layout"]');
   check('Movies header exposes the real Rows/Grid toggle', Boolean(headerLayout), headerLayout?.getAttribute('aria-label') || 'missing');
   headerLayout?.click(); await wait(140);
-  check('Header Grid toggle creates the catalog grid', state.layout === 'grid' && Boolean(document.querySelector('.grid .media-card')), `${state.layout}:${document.querySelectorAll('.grid .media-card').length}`);
+  check('Header Grid toggle creates the alphabetical catalog grid', state.layout === 'grid' && Boolean(document.querySelector('.alpha-index')) && Boolean(document.querySelector('.grid .media-card')), `${state.layout}:${document.querySelectorAll('.grid .media-card').length}`);
   await press('ArrowDown');
-  check('Down from header enters toolbar after grid render', document.activeElement?.classList.contains('chip'), activeLabel());
+  check('Down from header enters the genre selector after grid render', document.activeElement?.id === 'genre-filter', activeLabel());
   await press('ArrowDown');
   const firstGridKey = document.activeElement?.dataset?.key;
   check('Down from toolbar enters first grid card', Boolean(firstGridKey), activeLabel());
+  await press('g'); await wait(180);
+  const letterJumpItem = findItem(document.activeElement?.dataset?.key);
+  check('Typing G jumps to the first G title', letterJumpItem?.title?.toUpperCase().startsWith('G'), letterJumpItem?.title || activeLabel());
   await press('ArrowRight');
-  check('Right moves across grid cards', Boolean(document.activeElement?.dataset?.key) && document.activeElement.dataset.key !== firstGridKey, activeLabel());
+  check('Right moves across alphabetical grid groups', Boolean(document.activeElement?.dataset?.key) && document.activeElement.dataset.key !== letterJumpItem?.ratingKey, activeLabel());
   const beforeDown = document.activeElement?.dataset?.key;
   await press('ArrowDown');
   check('Down moves to the next grid row', Boolean(document.activeElement?.dataset?.key) && document.activeElement.dataset.key !== beforeDown, activeLabel());
@@ -963,10 +1095,16 @@ window.__runMinovaQa = async function runMinovaQa() {
   const returnToRows = document.querySelector('.topbar [data-action="layout"]');
   returnToRows?.click(); await wait(140);
   check('Header layout toggle returns to Rows', state.layout === 'rows' && Boolean(document.querySelector('.section .rail')), state.layout);
+  check('Rows include a shelf for every available genre', genresFor(state.catalog.movies).every((genre) => [...document.querySelectorAll('.section-title')].some((title) => title.textContent === genre)), [...document.querySelectorAll('.section-title')].map((title) => title.textContent).join(', '));
 
   document.querySelector('[data-tab="home"]').click(); await wait(140);
   check('Home returns focus to selected header tab', document.activeElement?.dataset?.tab === 'home', activeLabel());
   check('Desktop Home no longer renders the large hero', !document.querySelector('.hero, .hero-bg'), document.querySelector('.hero, .hero-bg') ? 'present' : 'removed');
+  const scrollableShelf = [...document.querySelectorAll('.home-shelves .rail-shell')].find((shell) => !shell.querySelector('.rail-arrow-right')?.disabled);
+  check('Scrollable shelves show a right-edge arrow', Boolean(scrollableShelf) && !scrollableShelf.querySelector('.rail-arrow-right')?.classList.contains('is-hidden'), scrollableShelf ? 'visible' : 'missing');
+  check('Shelf left arrow stays hidden before moving right', scrollableShelf?.querySelector('.rail-arrow-left')?.classList.contains('is-hidden'), scrollableShelf?.querySelector('.rail-arrow-left')?.className || 'missing');
+  scrollableShelf?.querySelector('.rail-arrow-right')?.click(); await wait(460);
+  check('Shelf left arrow appears after moving right', Number(scrollableShelf?.querySelector('.rail')?.scrollLeft) > 6 && !scrollableShelf?.querySelector('.rail-arrow-left')?.classList.contains('is-hidden'), scrollableShelf?.querySelector('.rail')?.scrollLeft || 0);
   await press('ArrowDown');
   const firstShelfKey = document.activeElement?.dataset?.key;
   check('Down from Home enters the first shelf directly', Boolean(firstShelfKey), activeLabel());
