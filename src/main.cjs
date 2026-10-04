@@ -6,7 +6,7 @@ const { PlexClient, isPlexOwnedHost, isTrustedExternalArtworkUrl, normalizeServe
 const { awaitPlexAuthorization, createPlexPin, discoverPlexServers } = require('./plex-auth.cjs');
 const { NativeMpvPlayer, mediaUrl } = require('./native-player.cjs');
 const { ensureClientIdentifier, migrateLegacySettings, readSettings, selectConnectionToken, writeSettings } = require('./settings.cjs');
-const { miniPlayerBounds } = require('./window-modes.cjs');
+const { miniPlayerBounds, resizePlaybackBounds } = require('./window-modes.cjs');
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'minova-plex', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true } }]);
 
@@ -497,6 +497,8 @@ function registerIpc() {
   ipcMain.handle('window:mini-player-state', () => windowModeState());
   ipcMain.handle('window:mini-player-resize', (_event, size) => resizeMiniPlayer(size));
   ipcMain.handle('window:mini-player-move', (_event, position) => moveMiniPlayer(position));
+  ipcMain.handle('window:playback-resize', (_event, request) => resizePlaybackWindow(request));
+  ipcMain.handle('window:playback-move', (_event, position) => movePlaybackWindow(position));
   ipcMain.handle('window:fullscreen', async () => {
     if (!mainWindow) return false;
     if (miniPlayerRestoreState) await setMiniPlayer(false);
@@ -525,6 +527,8 @@ function windowModeState() {
     miniPlayer: Boolean(miniPlayerRestoreState),
     miniPlayerPinned,
     bounds: mainWindow && !mainWindow.isDestroyed() ? mainWindow.getBounds() : null,
+    maximized: Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isMaximized()),
+    fullScreen: Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isFullScreen()),
   };
 }
 
@@ -550,6 +554,32 @@ function resizeMiniPlayer(size = {}) {
 
 function moveMiniPlayer(position = {}) {
   if (!mainWindow || mainWindow.isDestroyed() || !miniPlayerRestoreState) return windowModeState();
+  return movePlaybackWindow(position);
+}
+
+function resizePlaybackWindow(request = {}) {
+  if (!mainWindow || mainWindow.isDestroyed() || !nativePlayer || mainWindow.isFullScreen() || mainWindow.isMaximized()) {
+    return windowModeState();
+  }
+  const start = request.startBounds || mainWindow.getBounds();
+  const display = screen.getDisplayMatching(start);
+  const minimum = miniPlayerRestoreState ? { width: 360, height: 220 } : { width: 900, height: 560 };
+  const bounds = resizePlaybackBounds(
+    start,
+    String(request.edge || 'se').toLowerCase(),
+    { x: request.deltaX, y: request.deltaY },
+    display.workArea,
+    minimum,
+  );
+  mainWindow.setBounds(bounds, false);
+  syncPlayerOverlay();
+  return windowModeState();
+}
+
+function movePlaybackWindow(position = {}) {
+  if (!mainWindow || mainWindow.isDestroyed() || !nativePlayer || mainWindow.isFullScreen() || mainWindow.isMaximized()) {
+    return windowModeState();
+  }
   const current = mainWindow.getBounds();
   const requested = {
     x: Math.round(Number(position.x) || current.x),
@@ -731,7 +761,7 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
   mainWindow.once('ready-to-show', () => mainWindow.show());
   for (const event of ['move', 'resize', 'restore', 'maximize', 'unmaximize', 'enter-full-screen', 'leave-full-screen']) {
-    mainWindow.on(event, () => setImmediate(syncPlayerOverlay));
+    mainWindow.on(event, () => setImmediate(() => { syncPlayerOverlay(); publishWindowMode(); }));
   }
   for (const event of ['maximize', 'unmaximize', 'enter-full-screen', 'leave-full-screen']) {
     mainWindow.on(event, () => mainWindow?.webContents.send('window:state', {
@@ -920,6 +950,29 @@ async function runNativePlayerQa() {
     await nativePlayer.execute('enhancement', 'high');
     await nativePlayer.execute('toggle-pause');
     const state = nativePlayer.snapshot();
+    const initialPlaybackBounds = mainWindow.getBounds();
+    resizePlaybackWindow({
+      edge: 'se', startBounds: initialPlaybackBounds, deltaX: -120, deltaY: -80,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    const resizedPlaybackBounds = mainWindow.getBounds();
+    const normalPlayerResizes = resizedPlaybackBounds.width === initialPlaybackBounds.width - 120
+      && resizedPlaybackBounds.height === initialPlaybackBounds.height - 80;
+    const playbackDisplay = screen.getDisplayMatching(resizedPlaybackBounds);
+    const playbackMoveTarget = {
+      x: playbackDisplay.workArea.x + 72,
+      y: playbackDisplay.workArea.y + 64,
+    };
+    movePlaybackWindow(playbackMoveTarget);
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    const movedPlaybackBounds = mainWindow.getBounds();
+    const normalPlayerMoves = movedPlaybackBounds.x === playbackMoveTarget.x
+      && movedPlaybackBounds.y === playbackMoveTarget.y;
+    const normalPlayerOverlayMatches = !overlay.isDestroyed()
+      && JSON.stringify(overlay.getBounds()) === JSON.stringify(mainWindow.getBounds());
+    mainWindow.setBounds(initialPlaybackBounds, false);
+    syncPlayerOverlay();
+    await new Promise((resolve) => setTimeout(resolve, 120));
     const normalBounds = mainWindow.getNormalBounds();
     const miniEnabled = await setMiniPlayer(true);
     await new Promise((resolve) => setTimeout(resolve, 180));
@@ -956,7 +1009,7 @@ async function runNativePlayerQa() {
     const miniPlayerRestores = miniDisabled && !mainWindow.isAlwaysOnTop()
       && JSON.stringify(restoredBounds) === JSON.stringify(normalBounds);
     report = {
-      passed: state.ready && state.videoSurfaceReady && !separateVideoWindow && videoLumaRange > 18 && magentaRatio < 0.2 && state.paused && Math.abs(state.volume - 63) < 1 && volumeSliderKeepsPlaying && state.enhancement === 'high' && state.enhancementActive && miniPlayerWindow && miniPlayerUnpins && miniPlayerRepins && miniPlayerResizes && miniPlayerMoves && miniOverlayMatches && miniPlayerRestores,
+      passed: state.ready && state.videoSurfaceReady && !separateVideoWindow && videoLumaRange > 18 && magentaRatio < 0.2 && state.paused && Math.abs(state.volume - 63) < 1 && volumeSliderKeepsPlaying && state.enhancement === 'high' && state.enhancementActive && normalPlayerResizes && normalPlayerMoves && normalPlayerOverlayMatches && miniPlayerWindow && miniPlayerUnpins && miniPlayerRepins && miniPlayerResizes && miniPlayerMoves && miniOverlayMatches && miniPlayerRestores,
       state,
       checks: {
         embeddedNativeProcess: Boolean(nativePlayer.process && !nativePlayer.process.killed),
@@ -972,6 +1025,11 @@ async function runNativePlayerQa() {
         volumeSliderKeepsPlaying,
         shaderMode: state.enhancement === 'high' && state.enhancementActive,
         trackDiscovery: Array.isArray(state.tracks),
+        normalPlayerResizes,
+        resizedPlaybackBounds,
+        normalPlayerMoves,
+        movedPlaybackBounds,
+        normalPlayerOverlayMatches,
         miniPlayerWindow,
         miniPlayerEnabled: miniEnabled,
         miniPlayerAlwaysOnTop: miniAlwaysOnTop,

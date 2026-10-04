@@ -6,13 +6,19 @@ button { color: #f6fafc; }
 #player-overlay { position: relative; width: 100%; height: 100%; background: transparent; cursor: default; }
 #surface { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; outline: 0; background: transparent; }
 .player-chrome { position: absolute; z-index: 5; left: 0; right: 0; display: flex; opacity: 1; transition: opacity .55s ease; }
-.player-header { top: 0; align-items: center; min-height: 92px; gap: 17px; padding: 22px 34px 28px; background: linear-gradient(to bottom, rgba(1,5,8,.94), rgba(1,5,8,.58) 62%, transparent); }
+.player-header { top: 0; align-items: center; min-height: 92px; gap: 17px; padding: 22px 18px 28px 34px; cursor: move; touch-action: none; background: linear-gradient(to bottom, rgba(1,5,8,.94), rgba(1,5,8,.58) 62%, transparent); }
 .title-block { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
 .title-block strong { overflow: hidden; font-size: 17px; text-overflow: ellipsis; white-space: nowrap; }
 .title-block span { color: #8fa4b5; font-size: 12px; }
 .status-badges { display: flex; margin-left: auto; align-items: center; gap: 8px; }
 .status-badges span { padding: 7px 10px; border: 1px solid rgba(118,148,168,.28); border-radius: 7px; color: #b9cad5; background: rgba(8,17,24,.78); font-size: 11px; font-weight: 750; letter-spacing: .045em; }
 #enhancement-badge { color: #25dbea; border-color: rgba(37,219,234,.36); }
+.playback-window-controls { display: flex; align-self: flex-start; margin: -22px -18px 0 0; }
+.playback-window-controls button { position: relative; display: grid; width: 46px; height: 36px; padding: 0; place-items: center; border: 0; border-radius: 0; color: #92a3b4; background: rgba(5,11,16,.68); cursor: pointer; }
+.playback-window-controls button:hover { color: #fff; background: rgba(37,50,66,.92); }
+.minimize-glyph { width: 11px; height: 1px; background: currentColor; }
+.maximize-glyph { position: relative; width: 10px; height: 10px; border: 1px solid currentColor; }
+body.maximized .maximize-glyph::after { content: ""; position: absolute; width: 8px; height: 8px; margin: -4px 0 0 -4px; border: 1px solid currentColor; background: #0d151e; }
 .player-controls { bottom: 0; min-height: 112px; padding: 18px 24px 13px; flex-direction: column; gap: 12px; background: linear-gradient(to top, rgba(1,5,8,.97), rgba(1,5,8,.76) 65%, transparent); }
 .control-row { display: flex; min-width: 0; align-items: center; gap: 8px; }
 .spacer { flex: 1; }
@@ -60,6 +66,7 @@ body.mini-player .player-header { cursor: move; touch-action: none; }
 body.mini-player .player-header button { cursor: pointer; }
 body.mini-player .player-header .status-badges,
 body.mini-player .title-block span { display: none; }
+body.mini-player .playback-window-controls { display: none; }
 body.mini-player .title-block strong { font-size: 14px; }
 body.mini-player .player-controls { min-height: 82px; padding: 11px 12px 9px; gap: 6px; }
 body.mini-player .control-row { gap: 5px; }
@@ -74,18 +81,19 @@ body.mini-player [data-action="fullscreen"] { display: none; }
 body.mini-player .track-menu { display: none; }
 body.mini-player .notice { top: 68px; max-width: calc(100vw - 24px); font-size: 12px; }
 body.mini-player .pin-button { display: inline-flex; align-items: center; justify-content: center; }
-#resize-handle { display: none; }
-body.mini-player #resize-handle {
-  position: absolute;
-  z-index: 20;
-  right: 0;
-  bottom: 0;
-  display: block;
-  width: 22px;
-  height: 22px;
-  cursor: nwse-resize;
-}
-body.mini-player #resize-handle::after {
+.window-resize-handle { position: absolute; z-index: 20; display: block; }
+.resize-n { top: 0; left: 14px; right: 14px; height: 7px; cursor: ns-resize; }
+.resize-ne { top: 0; right: 0; width: 14px; height: 14px; cursor: nesw-resize; }
+.resize-e { top: 14px; right: 0; bottom: 14px; width: 7px; cursor: ew-resize; }
+.resize-se { right: 0; bottom: 0; width: 18px; height: 18px; cursor: nwse-resize; }
+.resize-s { right: 14px; bottom: 0; left: 14px; height: 7px; cursor: ns-resize; }
+.resize-sw { bottom: 0; left: 0; width: 14px; height: 14px; cursor: nesw-resize; }
+.resize-w { top: 14px; bottom: 14px; left: 0; width: 7px; cursor: ew-resize; }
+.resize-nw { top: 0; left: 0; width: 14px; height: 14px; cursor: nwse-resize; }
+body.maximized .window-resize-handle,
+body.fullscreen .window-resize-handle { display: none; }
+body.fullscreen .player-header { cursor: default; }
+body.mini-player .resize-se::after {
   content: "";
   position: absolute;
   right: 4px;

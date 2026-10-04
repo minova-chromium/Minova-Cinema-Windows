@@ -14,6 +14,8 @@ let hideTimer;
 let seeking = false;
 let miniPlayer = false;
 let miniPlayerPinned = false;
+let maximized = false;
+let fullScreen = false;
 let resizeSession = null;
 let resizeFrame = null;
 let moveSession = null;
@@ -30,9 +32,13 @@ function clock(value) {
 function button(action) { return document.querySelector(`[data-action="${action}"]`); }
 
 function renderWindowMode(mode = {}) {
-  miniPlayer = Boolean(mode.miniPlayer);
-  miniPlayerPinned = Boolean(mode.miniPlayerPinned);
+  if ('miniPlayer' in mode) miniPlayer = Boolean(mode.miniPlayer);
+  if ('miniPlayerPinned' in mode) miniPlayerPinned = Boolean(mode.miniPlayerPinned);
+  if ('maximized' in mode) maximized = Boolean(mode.maximized);
+  if ('fullScreen' in mode) fullScreen = Boolean(mode.fullScreen);
   document.body.classList.toggle('mini-player', miniPlayer);
+  document.body.classList.toggle('maximized', maximized);
+  document.body.classList.toggle('fullscreen', fullScreen);
   const control = button('mini-player');
   control.textContent = miniPlayer ? '▢' : '▣';
   control.setAttribute('aria-label', miniPlayer ? 'Restore full player' : 'Pop out mini-player');
@@ -45,6 +51,8 @@ function renderWindowMode(mode = {}) {
   const back = button('back');
   back.setAttribute('aria-label', miniPlayer ? 'Return to full player' : 'Close player');
   back.title = miniPlayer ? 'Return to full player' : 'Close player';
+  const maximize = button('window-maximize');
+  if (maximize) maximize.setAttribute('aria-label', maximized ? 'Restore playback window' : 'Maximize playback window');
   if (miniPlayer) trackMenu.hidden = true;
   showControls(true);
 }
@@ -155,9 +163,9 @@ function showTracks(kind) {
 }
 
 document.addEventListener('click', (event) => {
-  if (event.target.closest('#resize-handle')) return;
+  if (event.target.closest('.window-resize-handle')) return;
   const control = event.target.closest('[data-action]');
-  if (miniPlayer && event.target.closest('.player-header') && !control) return;
+  if (event.target.closest('.player-header') && !control) return;
   if (!control) {
     if (!event.target.closest('#track-menu, input, label')) command('toggle-pause');
     return;
@@ -178,6 +186,10 @@ document.addEventListener('click', (event) => {
   else if (action === 'pin') window.nativePlayer.pinMiniPlayer(!miniPlayerPinned).then((pinned) => renderWindowMode({ miniPlayer: true, miniPlayerPinned: pinned }));
   else if (action === 'mini-player') window.nativePlayer.miniPlayer(!miniPlayer).then((enabled) => renderWindowMode({ miniPlayer: enabled, miniPlayerPinned: enabled }));
   else if (action === 'fullscreen') window.nativePlayer.fullscreen();
+  else if (action === 'window-minimize') window.nativePlayer.minimize();
+  else if (action === 'window-maximize') {
+    window.nativePlayer.maximize().then(() => window.nativePlayer.miniPlayerState()).then(renderWindowMode);
+  }
   else if (action === 'enhancement') {
     const modes = ['off', 'balanced', 'high', 'ultra'];
     command('enhancement', modes[(modes.indexOf(state.enhancement) + 1) % modes.length]);
@@ -192,45 +204,53 @@ volume.addEventListener('click', (event) => event.stopPropagation());
 volume.addEventListener('pointerdown', (event) => { event.stopPropagation(); showControls(true); });
 volume.addEventListener('input', (event) => { event.stopPropagation(); command('volume', Number(volume.value)); });
 
-const resizeHandle = document.getElementById('resize-handle');
-resizeHandle.addEventListener('pointerdown', async (event) => {
-  if (!miniPlayer || event.button !== 0) return;
-  event.preventDefault();
-  const mode = await window.nativePlayer.miniPlayerState();
-  if (!mode?.bounds) return;
-  resizeSession = { x: event.screenX, y: event.screenY, width: mode.bounds.width, height: mode.bounds.height };
-  resizeHandle.setPointerCapture(event.pointerId);
-});
-resizeHandle.addEventListener('pointermove', (event) => {
-  if (!resizeSession || !miniPlayer) return;
-  const size = {
-    width: resizeSession.width + event.screenX - resizeSession.x,
-    height: resizeSession.height + event.screenY - resizeSession.y,
-  };
-  cancelAnimationFrame(resizeFrame);
-  resizeFrame = requestAnimationFrame(() => window.nativePlayer.resizeMiniPlayer(size));
-});
-for (const eventName of ['pointerup', 'pointercancel']) {
-  resizeHandle.addEventListener(eventName, () => { resizeSession = null; });
+for (const resizeHandle of document.querySelectorAll('.window-resize-handle')) {
+  resizeHandle.addEventListener('pointerdown', async (event) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    const mode = await window.nativePlayer.miniPlayerState();
+    if (!mode?.bounds || mode.fullScreen || mode.maximized) return;
+    resizeSession = {
+      x: event.screenX,
+      y: event.screenY,
+      edge: resizeHandle.dataset.resizeEdge,
+      startBounds: mode.bounds,
+    };
+    resizeHandle.setPointerCapture(event.pointerId);
+  });
+  resizeHandle.addEventListener('pointermove', (event) => {
+    if (!resizeSession) return;
+    const request = {
+      edge: resizeSession.edge,
+      startBounds: resizeSession.startBounds,
+      deltaX: event.screenX - resizeSession.x,
+      deltaY: event.screenY - resizeSession.y,
+    };
+    cancelAnimationFrame(resizeFrame);
+    resizeFrame = requestAnimationFrame(() => window.nativePlayer.resizePlaybackWindow(request));
+  });
+  for (const eventName of ['pointerup', 'pointercancel']) {
+    resizeHandle.addEventListener(eventName, () => { resizeSession = null; });
+  }
 }
 
 const moveHandle = document.querySelector('.player-header');
 moveHandle.addEventListener('pointerdown', async (event) => {
-  if (!miniPlayer || event.button !== 0 || event.target.closest('button')) return;
+  if (event.button !== 0 || event.target.closest('button')) return;
   event.preventDefault();
   const mode = await window.nativePlayer.miniPlayerState();
-  if (!mode?.bounds) return;
+  if (!mode?.bounds || mode.fullScreen || mode.maximized) return;
   moveSession = { x: event.screenX, y: event.screenY, left: mode.bounds.x, top: mode.bounds.y };
   moveHandle.setPointerCapture(event.pointerId);
 });
 moveHandle.addEventListener('pointermove', (event) => {
-  if (!moveSession || !miniPlayer) return;
+  if (!moveSession) return;
   const position = {
     x: moveSession.left + event.screenX - moveSession.x,
     y: moveSession.top + event.screenY - moveSession.y,
   };
   cancelAnimationFrame(moveFrame);
-  moveFrame = requestAnimationFrame(() => window.nativePlayer.moveMiniPlayer(position));
+  moveFrame = requestAnimationFrame(() => window.nativePlayer.movePlaybackWindow(position));
 });
 for (const eventName of ['pointerup', 'pointercancel']) {
   moveHandle.addEventListener(eventName, () => { moveSession = null; });
@@ -262,8 +282,8 @@ window.nativePlayer.onNotice((text) => {
   setTimeout(() => { notice.hidden = true; }, 3200);
 });
 window.nativePlayer.onWindowMode(renderWindowMode);
-window.nativePlayer.state().then((initial) => {
-  renderWindowMode({ miniPlayer: initial?.miniPlayer, miniPlayerPinned: initial?.miniPlayerPinned });
+Promise.all([window.nativePlayer.state(), window.nativePlayer.miniPlayerState()]).then(([initial, mode]) => {
+  renderWindowMode(mode || {});
   render(initial || {});
   button('play')?.focus();
 }).catch((error) => render({ loading: false, error: error.message }));

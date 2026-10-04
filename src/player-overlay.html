@@ -14,6 +14,10 @@
       <button class="icon-button" data-action="back" aria-label="Close player">←</button>
       <div class="title-block"><strong id="title">Minova Cinema</strong><span id="transport">Direct Play</span></div>
       <div class="status-badges"><span id="quality-badge">DIRECT PLAY</span><span id="enhancement-badge">GPU Balanced</span></div>
+      <div class="playback-window-controls" aria-label="Playback window controls">
+        <button type="button" data-action="window-minimize" aria-label="Minimize playback window"><span class="minimize-glyph"></span></button>
+        <button type="button" data-action="window-maximize" aria-label="Maximize playback window"><span class="maximize-glyph"></span></button>
+      </div>
     </header>
 
     <section id="message" class="message"><span class="spinner"></span><strong>Preparing playback…</strong></section>
@@ -42,7 +46,14 @@
         <button class="icon-button accent-outline" data-action="fullscreen" aria-label="Fullscreen">⛶</button>
       </div>
     </footer>
-    <div id="resize-handle" role="separator" aria-label="Resize mini-player" title="Drag to resize"></div>
+    <div class="window-resize-handle resize-n" data-resize-edge="n"></div>
+    <div class="window-resize-handle resize-ne" data-resize-edge="ne"></div>
+    <div class="window-resize-handle resize-e" data-resize-edge="e"></div>
+    <div class="window-resize-handle resize-se" data-resize-edge="se" role="separator" aria-label="Resize playback window" title="Drag to resize"></div>
+    <div class="window-resize-handle resize-s" data-resize-edge="s"></div>
+    <div class="window-resize-handle resize-sw" data-resize-edge="sw"></div>
+    <div class="window-resize-handle resize-w" data-resize-edge="w"></div>
+    <div class="window-resize-handle resize-nw" data-resize-edge="nw"></div>
   </main>
   <script src="player-overlay.js"></script>
 </body>

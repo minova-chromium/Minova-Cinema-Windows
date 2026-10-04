@@ -15,6 +15,7 @@ The Windows edition mirrors the Android TV 2.9 visual language while adapting it
 - Embedded libmpv Direct Play with automatic Plex HLS conversion fallback.
 - Optional next-episode autoplay, immediate watched-state synchronization, and controls that preserve playback while changing volume.
 - D3D11 hardware decoding, native audio/subtitle track discovery, precise seeking, and fullscreen playback.
+- A movable, edge-resizable playback window with minimize/maximize controls; fullscreen remains optional.
 - GPU scaling plus optional ArtCNN High and Ultra shader modes for 1080p-and-lower video.
 - Plex timeline progress plus watched and Watchlist updates.
 - Continue elsewhere handoff with confirmed Plex progress saving and foreground Continue Watching refresh.
