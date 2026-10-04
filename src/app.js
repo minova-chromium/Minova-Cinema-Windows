@@ -326,10 +326,15 @@ function watchAgain(items) {
   return watchedAnchors(items).filter((item) => item.isWatched);
 }
 
-function diversifiedRecommendations(items, exposure, limit = 24) {
+function diversifiedRecommendations(items, exposure, limit = 24, avoidKeys = new Set()) {
   const selected = uniqueTitles(items)
-    .map((item, rank) => ({ item, rank, exposure: exposure.get(item.ratingKey) || 0 }))
-    .sort((left, right) => left.exposure - right.exposure || left.rank - right.rank)
+    .map((item, rank) => ({
+      item,
+      rank,
+      avoided: avoidKeys.has(item.ratingKey) ? 1 : 0,
+      exposure: exposure.get(item.ratingKey) || 0,
+    }))
+    .sort((left, right) => left.avoided - right.avoided || left.exposure - right.exposure || left.rank - right.rank)
     .slice(0, limit)
     .map((entry) => entry.item);
   for (const item of selected) exposure.set(item.ratingKey, (exposure.get(item.ratingKey) || 0) + 1);
@@ -349,29 +354,45 @@ function homeShelves() {
   const library = uniqueTitles([...movies, ...shows]);
   const recentlyAdded = [...library].sort((left, right) => Number(right.addedAt || 0) - Number(left.addedAt || 0));
   const exposure = new Map();
+  const discoveryUsed = new Set();
+  const allocate = (items, limit = 24) => {
+    const selected = diversifiedRecommendations(items, exposure, limit, discoveryUsed);
+    selected.forEach((item) => discoveryUsed.add(item.ratingKey));
+    return selected;
+  };
+  const newReleaseItems = allocate(newestReleases(library));
   const personalRows = recommendationRows(library, 1).map((row) => ({
     ...row,
-    items: diversifiedRecommendations(row.items, exposure),
+    items: allocate(row.items),
   }));
-  const personalizedTopPicks = diversifiedRecommendations(topPicks(library), exposure);
+  const personalizedTopPicks = allocate(topPicks(library));
   const favoriteRow = favoriteGenreRow(library);
-  const favoriteItems = favoriteRow ? diversifiedRecommendations(favoriteRow.items, exposure) : [];
+  const favoriteItems = favoriteRow ? allocate(favoriteRow.items) : [];
   const comparisonRows = [...personalRows.map((row) => row.items), personalizedTopPicks];
   const diversifiedFavoriteRow = favoriteRow && favoriteItems.length >= 2
     && comparisonRows.every((items) => recommendationOverlap(favoriteItems, items) < .8)
     ? { ...favoriteRow, items: favoriteItems }
     : null;
+  const topRatedItems = allocate(topRated(library));
+  const topRatedKeys = new Set(topRatedItems.map((item) => item.ratingKey));
+  const hiddenPool = hiddenGems(library);
+  const hiddenPriority = [
+    ...hiddenPool.filter((item) => !topRatedKeys.has(item.ratingKey)),
+    ...hiddenPool.filter((item) => topRatedKeys.has(item.ratingKey)),
+  ];
+  const hiddenGemItems = allocate(hiddenPriority);
+  const recentlyAddedItems = allocate(recentlyAdded);
   return [
     shelf('Continue Watching', continueWatching, true),
-    shelf('New Releases', newestReleases(library)),
+    shelf('New Releases', newReleaseItems),
     ...personalRows.map((row) => shelf(row.title, row.items)),
     shelf('Top Picks for You', personalizedTopPicks),
     diversifiedFavoriteRow ? shelf(diversifiedFavoriteRow.title, diversifiedFavoriteRow.items) : '',
-    shelf('Top Rated', topRated(library)),
-    shelf('Hidden Gems', hiddenGems(library)),
-    shelf('Recently Added', recentlyAdded),
-    shelf('Watch Again', watchAgain(library)),
-    shelf('From Your Watchlist', watchlist),
+    shelf('Top Rated', topRatedItems),
+    shelf('Hidden Gems', hiddenGemItems),
+    shelf('Recently Added', recentlyAddedItems),
+    shelf('Watch Again', uniqueTitles(watchAgain(library)).slice(0, 24)),
+    shelf('From Your Watchlist', uniqueTitles(watchlist).slice(0, 24)),
   ].join('');
 }
 
@@ -1423,6 +1444,13 @@ window.__runMinovaQa = async function runMinovaQa() {
   const leadingSignatures = personalizedKeys.map((keys) => keys.slice(0, 8).join('|'));
   check('Personalized shelves do not repeat the same leading titles', new Set(leadingSignatures).size === leadingSignatures.length, leadingSignatures.join(' / '));
   check('Personalized shelves stay curated instead of dumping the entire library', personalizedKeys.every((keys) => keys.length <= 24), personalizedKeys.map((keys) => keys.length).join(','));
+  const discoveryNames = new Set(['New Releases', 'Top Picks for You', 'Top Rated', 'Hidden Gems', 'Recently Added']);
+  const discoveryKeys = [...document.querySelectorAll('.home-shelves .section')]
+    .filter((section) => discoveryNames.has(section.querySelector('.section-title')?.textContent || ''))
+    .map((section) => [...section.querySelectorAll('.media-card')].map((cardNode) => cardNode.dataset.key));
+  const discoverySignatures = discoveryKeys.map((keys) => keys.slice(0, 8).join('|'));
+  check('General discovery shelves do not repeat the same leading lineup', new Set(discoverySignatures).size === discoverySignatures.length, discoverySignatures.join(' / '));
+  check('General discovery shelves are capped curated lists', discoveryKeys.every((keys) => keys.length <= 24), discoveryKeys.map((keys) => keys.length).join(','));
   const scrollableSection = [...document.querySelectorAll('.home-shelves .section')].find((section) => !section.querySelector('.rail-arrow-right')?.disabled);
   check('Scrollable shelves show a clean heading-level right arrow', Boolean(scrollableSection) && !scrollableSection.querySelector('.rail-arrow-right')?.classList.contains('is-hidden'), scrollableSection ? 'visible' : 'missing');
   check('Shelf left arrow stays hidden before moving right', scrollableSection?.querySelector('.rail-arrow-left')?.classList.contains('is-hidden'), scrollableSection?.querySelector('.rail-arrow-left')?.className || 'missing');
