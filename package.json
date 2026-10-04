@@ -16,7 +16,10 @@
     "prepack": "pnpm run prepare:native-player && pnpm run prepare:installer-art",
     "pack": "electron-builder --dir --win",
     "predist": "pnpm run prepare:native-player && pnpm run prepare:installer-art",
-    "dist": "electron-builder --win nsis --publish never"
+    "dist:core": "electron-builder --win nsis --publish never",
+    "installer:custom": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Build-CustomInstaller.ps1",
+    "installer:test": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Test-CustomInstaller.ps1",
+    "dist": "pnpm run dist:core && pnpm run installer:custom"
   },
   "dependencies": {
     "electron-updater": "6.6.2"
@@ -66,7 +69,7 @@
     "win": {
       "icon": "assets/minova-cinema.ico",
       "target": "nsis",
-      "artifactName": "Minova-Cinema-Desktop-${version}-Setup.${ext}"
+      "artifactName": "Minova-Cinema-Desktop-${version}-Update.${ext}"
     },
     "nsis": {
       "oneClick": false,
