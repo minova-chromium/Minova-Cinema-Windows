@@ -1,22 +1,19 @@
-# Minova Cinema Desktop 1.0.5
+# Minova Cinema Desktop 1.0.6
 
-This release expands title discovery and episodic playback while preserving the established Minova Cinema desktop interface and native libmpv playback experience.
+This update keeps native playback inside a normal Windows window instead of locking the app into a fixed playback size.
 
 ## Highlights
 
-- Makes every cast portrait interactive and opens a dedicated actor profile with biography information, an IMDb link, and the actor's available movies and shows from the connected Plex libraries.
-- Adds optional next-episode autoplay with an on-screen countdown and a persistent Settings toggle.
-- Marks completed episodes watched immediately, refreshes Plex state after playback, and advances to the correct next episode.
-- Keeps playback running while the volume slider is changed instead of accidentally pausing the show.
-- Lets Back return from the draggable, resizable, always-on-top mini-player to the full player.
-- Improves personalized shelves with recent-viewing anchors, rarity-weighted genre matching, and exposure-aware selection so Because You Watched, Top Picks, and favorite-genre rows do not show the same leading movies.
-- Limits personalized rails to focused 24-title selections and hides a recommendation row when it would substantially duplicate another.
-- Retains secure Plex browser sign-in, automatic server discovery, encrypted credentials, the A–Z browser, native playback recovery, and automatic in-app updates from 1.0.4.
+- Drag the normal playback window from its header while a movie or episode is playing.
+- Resize playback from every edge and corner; the native video surface and controls remain aligned with the window.
+- Minimize or maximize playback using the new title-bar controls, while fullscreen remains available when wanted.
+- Preserves the existing draggable, resizable, always-on-top mini-player and all playback, Plex sync, autoplay, and recommendation improvements from 1.0.5.
+- Supports automatic in-app updating for existing Minova Cinema Desktop installations with the updater.
 
 Users on 1.0.0 need to install a newer build manually once because 1.0.0 did not contain the updater. Versions 1.0.2 and newer can discover and install this release from inside the app.
 
 ## Installer verification
 
-`Minova-Cinema-Desktop-1.0.5-Setup.exe`
+`Minova-Cinema-Desktop-1.0.6-Setup.exe`
 
-SHA-256: `2143FFE280CB5B16E61CADDFD0734F0D8E28B029F3F62EB73FB94E2C9BD4C0CB`
+SHA-256: `417B3C4CB62A7A2C31A34B7BBC07836219111FEB7E81B9AB09F691D1142A0E8A`
