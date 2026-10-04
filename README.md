@@ -10,14 +10,17 @@ The Windows edition mirrors the Android TV 2.9 visual language while adapting it
 - Continue Watching, discovery shelves, Movies, Series, Collections, Watchlist, and search.
 - Personalized Home discovery, complete genre shelves and filtering, clean edge-arrow shelf controls, and an alphabetical grid with A–Z keyboard jumping.
 - Movie, series, season, and episode details.
+- Cast-member profiles with biography information, an IMDb link, and every matching title in the connected Plex libraries.
 - Series Play/Resume automatically selects an in-progress episode, the next unwatched episode, or episode one for a fresh series.
 - Embedded libmpv Direct Play with automatic Plex HLS conversion fallback.
+- Optional next-episode autoplay, immediate watched-state synchronization, and controls that preserve playback while changing volume.
 - D3D11 hardware decoding, native audio/subtitle track discovery, precise seeking, and fullscreen playback.
 - GPU scaling plus optional ArtCNN High and Ultra shader modes for 1080p-and-lower video.
 - Plex timeline progress plus watched and Watchlist updates.
 - Continue elsewhere handoff with confirmed Plex progress saving and foreground Continue Watching refresh.
 - Automatic update checks and in-app installation from official GitHub Releases.
 - Continuous or separated A–Z grid organization, Arrow-key navigation, Enter, Escape/Backspace, Ctrl+F search, and fullscreen controls.
+- Diverse recommendation shelves that favor recent viewing and distinctive genres without repeating the same leading titles.
 
 ## Development
 

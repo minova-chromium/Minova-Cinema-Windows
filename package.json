@@ -1,6 +1,6 @@
 {
   "name": "minova-cinema-desktop",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Minova Cinema for Windows",
   "repository": "https://github.com/minova-chromium/Minova-Cinema-Windows.git",
   "main": "src/main.cjs",
