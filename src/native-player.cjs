@@ -268,9 +268,15 @@ class NativeMpvPlayer extends EventEmitter {
       return;
     }
     if (message.reason === 'eof') {
-      await this.client.setWatched(this.item.ratingKey, true).catch(() => {});
+      let watchedSynced = false;
+      try {
+        await this.client.setWatched(this.item.ratingKey, true);
+        watchedSynced = true;
+      } catch {
+        this.emit('notice', 'Playback finished, but Plex watched state could not be updated yet.');
+      }
       await this.reportTimeline('stopped').catch(() => {});
-      this.emit('ended');
+      this.emit('ended', { watchedSynced });
       return;
     }
     if (message.reason === 'error') this.fail(`mpv could not play this item${message.file_error ? `: ${message.file_error}` : '.'}`);

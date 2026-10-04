@@ -22,6 +22,7 @@ const state = {
   update: { status: 'idle', currentVersion: '', availableVersion: null, progress: 0, message: 'Automatic update checks are enabled.' },
 };
 let dismissedUpdateVersion = null;
+let nextUpTimer = null;
 
 const tabs = [
   ['home', 'Home'], ['movies', 'Movies'], ['series', 'Series'],
@@ -460,7 +461,9 @@ function settingsPage() {
         </select></label>
         <label class="field"><span>GPU enhancement</span><select id="enhancement">
           ${[['off','Off'],['balanced','Balanced GPU scaling'],['high','ArtCNN High'],['ultra','ArtCNN Ultra']].map(([value,label]) => `<option value="${value}" ${state.config.enhancement === value ? 'selected' : ''}>${label}</option>`).join('')}
-        </select></label><button class="primary settings-button" data-action="save-settings">Save playback quality</button>
+        </select></label>
+        <label class="field"><span>Autoplay next episode</span><select id="autoplay-next"><option value="on" ${state.config.autoplayNextEpisode !== false ? 'selected' : ''}>On · 10-second Next Up countdown</option><option value="off" ${state.config.autoplayNextEpisode === false ? 'selected' : ''}>Off · wait for Play next</option></select></label>
+        <button class="primary settings-button" data-action="save-settings">Save playback settings</button>
       </section>
       <section class="settings-card connection-card"><div class="settings-card-head"><span class="settings-icon">●</span><div><span class="settings-kicker">Plex</span><h2>Media Server</h2></div></div>
         <div class="connection-details"><span>Connection</span><strong>${connectionLabel}</strong><span>Server</span><strong class="server-value">${esc(serverLabel)}</strong></div>
@@ -511,7 +514,51 @@ function detailPage(item, children = [], seriesPlayback = null) {
       </div>
     </section>
     ${children.length ? `<section class="detail-section">${shelf(item.kind === 'show' ? 'Seasons' : 'Episodes', children)}</section>` : ''}
-    ${item.credits?.length ? `<section class="detail-section cast-section"><h2 class="section-title">Cast & Crew</h2><div class="rail">${item.credits.slice(0,30).map((person) => `<div class="credit-card" tabindex="0" aria-label="${esc(`${person.name}, ${person.role}`)}"><span class="credit-avatar">${person.imagePath ? `<img src="${art(person.imagePath)}" alt="${esc(person.name)}" loading="lazy">` : `<span class="credit-initial">${esc(person.name?.[0]?.toUpperCase() || '?')}</span>`}</span><strong>${esc(person.name)}</strong><span class="credit-role">${esc(person.role)}</span></div>`).join('')}</div></section>` : ''}
+    ${item.credits?.length ? `<section class="detail-section cast-section"><h2 class="section-title">Cast & Crew</h2><div class="rail">${item.credits.slice(0,30).map((person) => `<button class="credit-card" data-action="person" data-person-id="${esc(person.personId || '')}" data-person-name="${esc(person.name)}" data-person-role="${esc(person.role)}" data-person-image="${esc(person.imagePath || '')}" ${person.personId ? '' : 'disabled'} aria-label="Open ${esc(person.name)}, ${esc(person.role)}"><span class="credit-avatar">${person.imagePath ? `<img src="${art(person.imagePath)}" alt="${esc(person.name)}" loading="lazy">` : `<span class="credit-initial">${esc(person.name?.[0]?.toUpperCase() || '?')}</span>`}</span><strong>${esc(person.name)}</strong><span class="credit-role">${esc(person.role)}</span></button>`).join('')}</div></section>` : ''}
+  </div>`;
+}
+
+function personPage(profile) {
+  const media = profile?.media || [];
+  return `<div class="screen person-page">
+    <div class="person-ambient"></div>
+    <button class="back-button" data-action="back" aria-label="Back">←</button>
+    <section class="person-hero">
+      <div class="person-portrait">${profile?.imagePath ? `<img src="${art(profile.imagePath)}" alt="${esc(profile.name)}">` : `<span>${esc(profile?.name?.[0]?.toUpperCase() || '?')}</span>`}</div>
+      <div class="person-copy">
+        <span class="eyebrow">Cast profile</span>
+        <h1>${esc(profile?.name || 'Cast member')}</h1>
+        <p class="person-role">${esc(profile?.role || 'Actor')}</p>
+        <p class="person-biography">${esc(profile?.biography || 'No biography is available yet. You can still browse every matching title in this Plex library or open IMDb for more information.')}</p>
+        <div class="person-actions">
+          ${profile?.imdbUrl ? `<button class="primary" data-action="external" data-url="${esc(profile.imdbUrl)}">Open IMDb ↗</button>` : ''}
+          ${profile?.sourceUrl ? `<button class="secondary" data-action="external" data-url="${esc(profile.sourceUrl)}">Biography source ↗</button>` : ''}
+        </div>
+        ${profile?.sourceLabel ? `<small class="person-source">Biography: ${esc(profile.sourceLabel)} · Library titles: Plex</small>` : '<small class="person-source">Library titles provided by Plex</small>'}
+      </div>
+    </section>
+    <section class="person-library detail-section"><h2 class="section-title">Movies & Shows in Your Library</h2>
+      ${media.length ? `<div class="rail">${media.map((item) => card(item)).join('')}</div>` : '<p class="person-empty">No matching movies or shows were returned by this Plex server.</p>'}
+    </section>
+  </div>`;
+}
+
+function nextUpPage(route) {
+  const episode = route.episode;
+  const bg = episode.backdropPath || episode.posterPath;
+  return `<div class="screen next-up-page">
+    <div class="detail-bg">${bg ? `<img src="${art(bg)}" alt="" aria-hidden="true">` : ''}</div>
+    <section class="next-up-card">
+      <span class="eyebrow">Next episode</span>
+      <h1>${esc(episode.title)}</h1>
+      <p class="meta">${esc(episode.secondaryTitle || metadata(episode))}</p>
+      <p>${route.autoplay ? `Playing automatically in ${route.seconds} seconds.` : 'Autoplay is off. Start the episode when you are ready.'}</p>
+      <div class="actions">
+        <button class="primary" data-action="play-next" data-key="${esc(episode.ratingKey)}">▶ &nbsp;Play now</button>
+        <button class="secondary" data-action="toggle-autoplay">${route.autoplay ? 'Disable autoplay' : 'Enable autoplay'}</button>
+        <button class="secondary" data-action="cancel-next">Back to details</button>
+      </div>
+    </section>
   </div>`;
 }
 
@@ -528,16 +575,26 @@ function playerPage(payload) {
 }
 
 function render() {
+  clearTimeout(nextUpTimer);
   if (!state.config) { appRoot.innerHTML = loading('Starting Minova Cinema…'); refreshUpdateDialog(); return; }
   if (!state.config.connected && !state.config.demoMode) { appRoot.innerHTML = onboarding(); bindPage(); refreshUpdateDialog(); return; }
   if (state.loading) { appRoot.innerHTML = loading(); refreshUpdateDialog(); return; }
   if (state.route.type === 'settings') appRoot.innerHTML = settingsPage();
   else if (state.route.type === 'detail') appRoot.innerHTML = detailPage(state.route.item, state.route.children || [], state.route.seriesPlayback || null);
+  else if (state.route.type === 'person') appRoot.innerHTML = personPage(state.route.profile);
   else if (state.route.type === 'collection') appRoot.innerHTML = collectionDetailPage(state.route.collection, state.route.members);
   else if (state.route.type === 'player') appRoot.innerHTML = playerPage(state.route.payload);
+  else if (state.route.type === 'next-up') appRoot.innerHTML = nextUpPage(state.route);
   else appRoot.innerHTML = browsePage();
   bindPage();
   refreshUpdateDialog();
+  if (state.route.type === 'next-up' && state.route.autoplay) {
+    nextUpTimer = setTimeout(() => {
+      if (state.route.type !== 'next-up' || !state.route.autoplay) return;
+      if (state.route.seconds <= 1) play(state.route.episode.ratingKey, { replace: true });
+      else { state.route.seconds -= 1; render(); }
+    }, 1000);
+  }
 }
 
 function bindPage() {
@@ -747,11 +804,13 @@ function navigateDpad(key) {
   }
   if (active.matches('select')) {
     if (key === 'ArrowUp') {
+      if (active.id === 'autoplay-next') return focusNode(document.getElementById('enhancement'));
       if (active.id === 'enhancement') return focusNode(document.getElementById('quality'));
       return focusHeaderFor(active);
     }
     if (key === 'ArrowDown') {
       if (active.id === 'quality') return focusNode(document.getElementById('enhancement'));
+      if (active.id === 'enhancement') return focusNode(document.getElementById('autoplay-next'));
       if (active.id === 'genre-filter') return focusNode(document.querySelector('.grid .media-card, .rail .media-card'));
       return focusNode(document.querySelector('.settings-page button'));
     }
@@ -981,9 +1040,9 @@ async function openCollection(key) {
   } catch (error) { showToast(errorMessage(error)); }
 }
 
-async function play(key) {
+async function play(key, { replace = false } = {}) {
   const previousRoute = state.route;
-  state.routeStack.push(previousRoute);
+  if (!replace) state.routeStack.push(previousRoute);
   state.route = { type: 'player', payload: null };
   render();
   try {
@@ -991,10 +1050,21 @@ async function play(key) {
     state.route = { type: 'player', payload };
     render();
   } catch (error) {
-    state.routeStack.pop();
+    if (!replace) state.routeStack.pop();
     state.route = previousRoute;
     render();
     showToast(errorMessage(error));
+  }
+}
+
+async function openPerson(credit) {
+  pushRoute({ type: 'person', profile: { ...credit, media: [], biography: 'Loading profile…' } });
+  try {
+    const profile = await window.minova.person(credit);
+    if (state.route.type === 'person') { state.route = { type: 'person', profile }; render(); }
+  } catch (error) {
+    showToast(errorMessage(error));
+    goBack();
   }
 }
 
@@ -1008,8 +1078,27 @@ document.addEventListener('click', async (event) => {
   const { action, key } = target.dataset;
   if (action === 'tab') { state.tab = target.dataset.tab; state.genre = null; state.route = { type: 'browse' }; render(); }
   else if (action === 'open') openDetails(key);
+  else if (action === 'person') openPerson({
+    personId: target.dataset.personId,
+    name: target.dataset.personName,
+    role: target.dataset.personRole,
+    imagePath: target.dataset.personImage || null,
+  });
   else if (action === 'collection') openCollection(key);
   else if (action === 'play') play(key);
+  else if (action === 'play-next') play(key, { replace: true });
+  else if (action === 'cancel-next') {
+    state.route = state.routeStack.pop() || { type: 'browse' };
+    render();
+  }
+  else if (action === 'toggle-autoplay') {
+    state.route.autoplay = !state.route.autoplay;
+    state.route.seconds = 10;
+    state.config.autoplayNextEpisode = state.route.autoplay;
+    await window.minova.savePreferences({ autoplayNextEpisode: state.route.autoplay });
+    render();
+  }
+  else if (action === 'external') window.minova.openExternal(target.dataset.url);
   else if (action === 'back') goBack();
   else if (action === 'settings') pushRoute({ type: 'settings' });
   else if (action === 'fullscreen') window.minova.fullscreen();
@@ -1053,7 +1142,8 @@ document.addEventListener('click', async (event) => {
   else if (action === 'save-settings') {
     state.config.quality = document.getElementById('quality').value;
     state.config.enhancement = document.getElementById('enhancement').value;
-    await window.minova.savePreferences({ quality: state.config.quality, enhancement: state.config.enhancement }); showToast('Native playback settings saved.');
+    state.config.autoplayNextEpisode = document.getElementById('autoplay-next').value === 'on';
+    await window.minova.savePreferences({ quality: state.config.quality, enhancement: state.config.enhancement, autoplayNextEpisode: state.config.autoplayNextEpisode }); showToast('Native playback settings saved.');
   } else if (action === 'save-browsing') {
     state.config.splitAlphabetical = document.getElementById('grid-organization').value === 'sections';
     await window.minova.savePreferences({ splitAlphabetical: state.config.splitAlphabetical });
@@ -1150,11 +1240,18 @@ function recordLocalViewingSignal(playback) {
   item.viewedCount = Math.max(1, Number(item.viewedCount || 0));
 }
 
-window.minova.nativePlayer.onClosed(() => {
+window.minova.nativePlayer.onClosed((result = {}) => {
   if (state.route.type !== 'player') return;
-  const playback = state.route.payload;
+  const playback = { ...(state.route.payload || {}), ...(result.completed || {}) };
   recordLocalViewingSignal(playback);
-  state.route = state.routeStack.pop() || { type: 'browse' };
+  if (result.reason === 'ended' && result.nextEpisode) {
+    state.route = {
+      type: 'next-up', episode: result.nextEpisode, seconds: 10,
+      autoplay: result.autoplayEnabled !== false,
+    };
+  } else {
+    state.route = state.routeStack.pop() || { type: 'browse' };
+  }
   render();
   syncCatalog(null, { silent: true }).then((changed) => {
     recordLocalViewingSignal(playback);
@@ -1237,6 +1334,12 @@ window.__runMinovaQa = async function runMinovaQa() {
   const detailActions = document.querySelector('.detail-copy .actions');
   check('Cast heading aligns with the cast rail', Boolean(castHeading && firstCastCard) && Math.abs(castHeading.getBoundingClientRect().left - firstCastCard.getBoundingClientRect().left) < 3, `${castHeading?.getBoundingClientRect().left}:${firstCastCard?.getBoundingClientRect().left}`);
   check('Cast section follows the detail actions without a large offset', Boolean(castHeading && detailActions) && castHeading.getBoundingClientRect().top - detailActions.getBoundingClientRect().bottom < 90, castHeading && detailActions ? castHeading.getBoundingClientRect().top - detailActions.getBoundingClientRect().bottom : 'missing');
+  document.querySelector('.credit-card[data-action="person"]')?.click(); await wait(180);
+  check('Cast card opens a Minova actor profile', state.route.type === 'person' && Boolean(document.querySelector('.person-page .person-biography')), state.route.type);
+  check('Actor profile lists titles from the connected library', document.querySelectorAll('.person-page .media-card').length > 0, document.querySelectorAll('.person-page .media-card').length);
+  check('Actor profile offers an IMDb link without scraping IMDb', Boolean(document.querySelector('.person-page [data-action="external"]')), document.querySelector('.person-page .person-links')?.textContent.trim() || 'missing');
+  await press('Backspace');
+  check('Back returns from actor profile to title details', state.route.type === 'detail' && Boolean(document.querySelector('.detail-copy')), state.route.type);
   await press('ArrowRight');
   check('Right moves across detail actions', Boolean(document.activeElement?.closest('.detail-copy .actions')), activeLabel());
   await press('Backspace');
@@ -1318,6 +1421,14 @@ window.__runMinovaQa = async function runMinovaQa() {
   check('Unwatched series detail offers Play', freshSeriesPrimary?.textContent.includes('Play') && freshSeriesPrimary?.dataset?.key === 'demo-7-season-1-episode-1', `${freshSeriesPrimary?.textContent.trim() || 'missing'}:${freshSeriesPrimary?.dataset?.key || ''}`);
   await press('Backspace');
 
+  const nextUpEpisode = (await window.minova.children('demo-7-season-1'))[1];
+  pushRoute({ type: 'next-up', episode: nextUpEpisode, seconds: 10, autoplay: true }); await wait(100);
+  check('Episode completion screen offers Next Up controls', state.route.type === 'next-up' && Boolean(document.querySelector('[data-action="play-next"]')) && Boolean(document.querySelector('[data-action="cancel-next"]')), state.route.type);
+  document.querySelector('[data-action="toggle-autoplay"]')?.click(); await wait(80);
+  check('Autoplay can be disabled from the Next Up screen', state.route.type === 'next-up' && state.route.autoplay === false, state.route.autoplay);
+  document.querySelector('[data-action="cancel-next"]')?.click(); await wait(80);
+  check('Cancelling Next Up returns to Series', state.route.type === 'browse' && state.tab === 'series', `${state.route.type}:${state.tab}`);
+
   document.querySelector('[data-action="settings"]').click(); await wait(140);
   check('Settings receives focus on its header control', document.activeElement?.dataset?.action === 'settings', activeLabel());
   check('Settings includes the six-card dashboard with browsing and automatic updates', document.querySelectorAll('.settings-grid .settings-card').length === 6 && Boolean(document.querySelector('[data-action="check-update"]')) && Boolean(document.getElementById('grid-organization')), document.querySelectorAll('.settings-grid .settings-card').length);
@@ -1339,7 +1450,9 @@ window.__runMinovaQa = async function runMinovaQa() {
   await press('ArrowDown');
   check('Down moves from quality to native GPU enhancement', document.activeElement?.id === 'enhancement', activeLabel());
   await press('ArrowDown');
-  check('Down leaves enhancement for Save', document.activeElement?.dataset?.action === 'save-settings', activeLabel());
+  check('Down moves from enhancement to autoplay', document.activeElement?.id === 'autoplay-next', activeLabel());
+  await press('ArrowDown');
+  check('Down leaves autoplay for Save', document.activeElement?.dataset?.action === 'save-settings', activeLabel());
   await press('ArrowDown');
   check('Down reaches Sync Plex now', document.activeElement?.dataset?.action === 'sync', activeLabel());
   const previousSync = state.catalogSyncedAt;

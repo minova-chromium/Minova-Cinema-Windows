@@ -1,4 +1,5 @@
 const { randomUUID } = require('node:crypto');
+const { lookupPersonBackground } = require('./person-metadata.cjs');
 
 const PRODUCT_VERSION = require('../package.json').version;
 const CLIENT_ID = 'MinovaCinemaDesktop';
@@ -89,6 +90,20 @@ function proxyPath(path) {
   return path && String(path).trim() ? String(path) : null;
 }
 
+function personIdentifier(person = {}) {
+  const candidate = person.personId || person.tagKey || person.id || String(person.filter || '').match(/(?:actor|director|writer|producer)=([^&]+)/i)?.[1];
+  return candidate == null ? null : String(candidate).trim() || null;
+}
+
+function mapCredit(person = {}, fallbackRole) {
+  return {
+    name: person.tag,
+    role: person.role || fallbackRole,
+    imagePath: proxyPath(person.thumb),
+    personId: personIdentifier(person),
+  };
+}
+
 function mapMetadata(metadata = {}) {
   const kind = ({ show: 'show', season: 'season', episode: 'episode', clip: 'extra' })[metadata.type] || 'movie';
   const media = (metadata.Media || [])[0] || {};
@@ -134,10 +149,10 @@ function mapMetadata(metadata = {}) {
     isWatched: kind === 'show' || kind === 'season' ? seasonComplete : (metadata.viewCount || 0) > 0,
     audienceRating: metadata.audienceRating ?? metadata.rating ?? null,
     credits: [
-      ...(metadata.Role || []).map((person) => ({ name: person.tag, role: person.role || 'Cast', imagePath: proxyPath(person.thumb) })),
-      ...(metadata.Director || []).map((person) => ({ name: person.tag, role: 'Director', imagePath: proxyPath(person.thumb) })),
-      ...(metadata.Writer || []).map((person) => ({ name: person.tag, role: 'Writer', imagePath: proxyPath(person.thumb) })),
-      ...(metadata.Producer || []).map((person) => ({ name: person.tag, role: 'Producer', imagePath: proxyPath(person.thumb) })),
+      ...(metadata.Role || []).map((person) => mapCredit(person, 'Cast')),
+      ...(metadata.Director || []).map((person) => mapCredit(person, 'Director')),
+      ...(metadata.Writer || []).map((person) => mapCredit(person, 'Writer')),
+      ...(metadata.Producer || []).map((person) => mapCredit(person, 'Producer')),
     ].filter((person) => person.name).filter((person, index, people) =>
       people.findIndex((candidate) => candidate.name === person.name && candidate.role === person.role) === index
     ),
@@ -279,6 +294,43 @@ class PlexClient {
     return (await this.paged(`/library/collections/${encodeURIComponent(ratingKey)}/children`)).map(mapMetadata);
   }
 
+  async person(credit = {}) {
+    const id = personIdentifier(credit);
+    if (!id) throw new Error(`Plex did not provide a profile identity for ${credit.name || 'this person'}.`);
+    const encoded = encodeURIComponent(id);
+    const [detailsPayload, mediaPayload, background] = await Promise.all([
+      this.request(`/library/people/${encoded}`).catch(() => ({})),
+      this.request(`/library/people/${encoded}/media`),
+      lookupPersonBackground(credit.name).catch(() => null),
+    ]);
+    const directory = detailsPayload?.MediaContainer?.Directory?.[0] || {};
+    const media = metadataList(mediaPayload).map(mapMetadata)
+      .filter((item) => item.kind === 'movie' || item.kind === 'show')
+      .filter((item, index, items) => items.findIndex((candidate) => candidate.ratingKey === item.ratingKey) === index);
+    return {
+      personId: id,
+      name: directory.tag || directory.title || credit.name || 'Cast member',
+      role: credit.role || 'Cast',
+      imagePath: proxyPath(directory.thumb || credit.imagePath),
+      biography: background?.biography || null,
+      sourceLabel: background?.sourceLabel || null,
+      sourceUrl: background?.sourceUrl || null,
+      imdbUrl: background?.imdbUrl || null,
+      media,
+    };
+  }
+
+  async nextEpisode(content = {}) {
+    if (content.kind !== 'episode' || !content.grandparentRatingKey) return null;
+    const seasons = (await this.children(content.grandparentRatingKey))
+      .filter((item) => item.kind === 'season')
+      .sort(episodeOrder);
+    const episodeGroups = await Promise.all(seasons.map((season) => this.children(season.ratingKey)));
+    const episodes = episodeGroups.flat().filter((item) => item.kind === 'episode').sort(episodeOrder);
+    const currentIndex = episodes.findIndex((item) => item.ratingKey === content.ratingKey);
+    return currentIndex >= 0 ? episodes[currentIndex + 1] || null : null;
+  }
+
   async setWatched(ratingKey, watched) {
     await this.request(`/:/${watched ? 'scrobble' : 'unscrobble'}?key=${encodeURIComponent(ratingKey)}&identifier=com.plexapp.plugins.library`);
     return true;
@@ -317,6 +369,11 @@ class PlexClient {
   }
 }
 
+function episodeOrder(left, right) {
+  const season = (item) => Number(item.seasonNumber || 0) === 0 ? 10000 : Number(item.seasonNumber || 0);
+  return season(left) - season(right) || Number(left.episodeNumber || 0) - Number(right.episodeNumber || 0);
+}
+
 function rewritePlaylist(text, sourceUrl, wrap) {
   return String(text).split(/\r?\n/).map((line) => {
     if (!line) return line;
@@ -325,4 +382,4 @@ function rewritePlaylist(text, sourceUrl, wrap) {
   }).join('\n');
 }
 
-module.exports = { PlexClient, CLIENT_ID, connectionErrorMessage, isPlexOwnedHost, isTrustedExternalArtworkUrl, mapMetadata, normalizeServer, plexHeaders, rewritePlaylist };
+module.exports = { PlexClient, CLIENT_ID, connectionErrorMessage, episodeOrder, isPlexOwnedHost, isTrustedExternalArtworkUrl, mapMetadata, normalizeServer, personIdentifier, plexHeaders, rewritePlaylist };

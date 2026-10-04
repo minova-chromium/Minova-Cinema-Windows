@@ -42,6 +42,9 @@ function renderWindowMode(mode = {}) {
   pin.setAttribute('aria-pressed', String(miniPlayerPinned));
   pin.setAttribute('aria-label', miniPlayerPinned ? 'Unpin mini-player' : 'Keep mini-player on top');
   pin.title = miniPlayerPinned ? 'Unpin mini-player' : 'Keep mini-player on top';
+  const back = button('back');
+  back.setAttribute('aria-label', miniPlayer ? 'Return to full player' : 'Close player');
+  back.title = miniPlayer ? 'Return to full player' : 'Close player';
   if (miniPlayer) trackMenu.hidden = true;
   showControls(true);
 }
@@ -152,14 +155,18 @@ function showTracks(kind) {
 }
 
 document.addEventListener('click', (event) => {
-  if (event.target.closest('#resize-handle') || miniPlayer && event.target.closest('.player-header')) return;
+  if (event.target.closest('#resize-handle')) return;
   const control = event.target.closest('[data-action]');
+  if (miniPlayer && event.target.closest('.player-header') && !control) return;
   if (!control) {
-    if (!event.target.closest('#track-menu')) command('toggle-pause');
+    if (!event.target.closest('#track-menu, input, label')) command('toggle-pause');
     return;
   }
   const action = control.dataset.action;
-  if (action === 'back') window.nativePlayer.close();
+  if (action === 'back') {
+    if (miniPlayer) window.nativePlayer.miniPlayer(false).then((enabled) => renderWindowMode({ miniPlayer: enabled, miniPlayerPinned: false }));
+    else window.nativePlayer.close();
+  }
   else if (action === 'play') command('toggle-pause');
   else if (action === 'rewind') command('seek-relative', -10);
   else if (action === 'forward') command('seek-relative', 10);
@@ -181,7 +188,9 @@ document.addEventListener('click', (event) => {
 seek.addEventListener('pointerdown', () => { seeking = true; showControls(true); });
 seek.addEventListener('input', () => { time.textContent = `${clock(seek.value)} / ${clock(state.duration)}`; });
 seek.addEventListener('change', () => { seeking = false; command('seek-absolute', Number(seek.value)); });
-volume.addEventListener('input', () => command('volume', Number(volume.value)));
+volume.addEventListener('click', (event) => event.stopPropagation());
+volume.addEventListener('pointerdown', (event) => { event.stopPropagation(); showControls(true); });
+volume.addEventListener('input', (event) => { event.stopPropagation(); command('volume', Number(volume.value)); });
 
 const resizeHandle = document.getElementById('resize-handle');
 resizeHandle.addEventListener('pointerdown', async (event) => {
@@ -229,7 +238,11 @@ for (const eventName of ['pointerup', 'pointercancel']) {
 
 document.addEventListener('keydown', (event) => {
   if (event.target.matches('input[type="range"]') && !['ArrowUp', 'ArrowDown'].includes(event.key)) return;
-  if (event.key === 'Escape' || event.key === 'Backspace') { event.preventDefault(); window.nativePlayer.close(); }
+  if (event.key === 'Escape' || event.key === 'Backspace') {
+    event.preventDefault();
+    if (miniPlayer) window.nativePlayer.miniPlayer(false).then((enabled) => renderWindowMode({ miniPlayer: enabled, miniPlayerPinned: false }));
+    else window.nativePlayer.close();
+  }
   else if (event.key === ' ' || event.key === 'Enter' && event.target === document.body) { event.preventDefault(); command('toggle-pause'); }
   else if (event.key.startsWith('Arrow') && focusDirectional(event.key)) { event.preventDefault(); }
   else if (event.key === 'ArrowLeft') { event.preventDefault(); command('seek-relative', -10); }

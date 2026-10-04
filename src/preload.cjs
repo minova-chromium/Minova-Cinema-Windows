@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('minova', {
   details: (key) => ipcRenderer.invoke('media:details', key),
   children: (key) => ipcRenderer.invoke('media:children', key),
   collection: (key) => ipcRenderer.invoke('media:collection', key),
+  person: (credit) => ipcRenderer.invoke('media:person', credit),
   setWatched: (key, watched) => ipcRenderer.invoke('media:set-watched', { key, watched }),
   setWatchlisted: (providerRatingKey, watchlisted) => ipcRenderer.invoke('media:set-watchlisted', { providerRatingKey, watchlisted }),
   timeline: (item, state, timeMs) => ipcRenderer.invoke('media:timeline', { item, state, timeMs }),
@@ -22,7 +23,7 @@ contextBridge.exposeInMainWorld('minova', {
   nativePlayer: {
     start: (key, quality) => ipcRenderer.invoke('native-player:start', { key, quality }),
     stop: () => ipcRenderer.invoke('native-player:close'),
-    onClosed: (callback) => ipcRenderer.on('native-player:closed', () => callback()),
+    onClosed: (callback) => ipcRenderer.on('native-player:closed', (_event, payload) => callback(payload || { reason: 'closed' })),
     onHandoffCompleted: (callback) => ipcRenderer.on('native-player:handoff-complete', (_event, payload) => callback(payload)),
   },
   updates: {

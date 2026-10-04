@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { connectionErrorMessage, isPlexOwnedHost, isTrustedExternalArtworkUrl, mapMetadata, normalizeServer, rewritePlaylist } = require('../src/plex.cjs');
+const { connectionErrorMessage, episodeOrder, isPlexOwnedHost, isTrustedExternalArtworkUrl, mapMetadata, normalizeServer, personIdentifier, rewritePlaylist } = require('../src/plex.cjs');
 
 test('normalizes a LAN Plex address and supplies the default port', () => {
   assert.equal(normalizeServer('192.168.1.25'), 'http://192.168.1.25:32400');
@@ -14,8 +14,8 @@ test('maps Plex metadata without exposing an authenticated URL', () => {
     ratingKey: '42', type: 'movie', title: 'Example', year: 2026, duration: 600000,
     viewOffset: 150000, lastViewedAt: 1790000000, viewCount: 1,
     thumb: '/library/metadata/42/thumb/1', art: '/library/metadata/42/art/1',
-    Genre: [{ tag: 'Drama' }], Role: [{ tag: 'Ava Stone', role: 'Lead', thumb: '/library/people/9/thumb' }],
-    Producer: [{ tag: 'Maya North', thumb: '/library/people/10/thumb' }],
+    Genre: [{ tag: 'Drama' }], Role: [{ id: 9, tagKey: 'plex-person-9', tag: 'Ava Stone', role: 'Lead', thumb: '/library/people/9/thumb' }],
+    Producer: [{ id: 10, tag: 'Maya North', thumb: '/library/people/10/thumb' }],
     Media: [{ container: 'mkv', videoCodec: 'hevc', Part: [{ id: 7, key: '/library/parts/7/file.mkv' }] }],
   });
   assert.equal(item.title, 'Example');
@@ -24,10 +24,22 @@ test('maps Plex metadata without exposing an authenticated URL', () => {
   assert.equal(item.viewedCount, 1);
   assert.equal(item.posterPath, '/library/metadata/42/thumb/1');
   assert.equal(item.backdropPath, '/library/metadata/42/art/1');
-  assert.deepEqual(item.credits[0], { name: 'Ava Stone', role: 'Lead', imagePath: '/library/people/9/thumb' });
-  assert.deepEqual(item.credits[1], { name: 'Maya North', role: 'Producer', imagePath: '/library/people/10/thumb' });
+  assert.deepEqual(item.credits[0], { name: 'Ava Stone', role: 'Lead', imagePath: '/library/people/9/thumb', personId: 'plex-person-9' });
+  assert.deepEqual(item.credits[1], { name: 'Maya North', role: 'Producer', imagePath: '/library/people/10/thumb', personId: '10' });
   assert.equal(item.playback.directPath, '/library/parts/7/file.mkv');
   assert.equal(JSON.stringify(item).includes('X-Plex-Token'), false);
+});
+
+test('resolves Plex person identities and orders episodes across seasons', () => {
+  assert.equal(personIdentifier({ tagKey: 'abc123', id: 42 }), 'abc123');
+  assert.equal(personIdentifier({ filter: 'actor=53374' }), '53374');
+  assert.equal(personIdentifier({}), null);
+  const episodes = [
+    { seasonNumber: 2, episodeNumber: 1 },
+    { seasonNumber: 1, episodeNumber: 5 },
+    { seasonNumber: 0, episodeNumber: 1 },
+  ].sort(episodeOrder);
+  assert.deepEqual(episodes.map((item) => [item.seasonNumber, item.episodeNumber]), [[1, 5], [2, 1], [0, 1]]);
 });
 
 test('uses the parent show artwork behind episode details', () => {

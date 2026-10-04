@@ -232,9 +232,9 @@ function demoCatalog() {
     lastViewedAt: options.lastViewedAt || null, audienceRating: 6.6 + (id % 4) * .7,
     addedAt: 1790000000 - id * 84000, releaseDate: `${year}-${String((id % 9) + 1).padStart(2, '0')}-15`,
     credits: [
-      { name: 'Ava Stone', role: 'Lead cast', imagePath: 'asset:minova-symbol-color.svg' },
-      { name: 'Noah Vale', role: 'Cast', imagePath: 'asset:minova-cinema-wordmark.png' },
-      { name: 'Maya North', role: 'Director', imagePath: null },
+      { name: 'Ava Stone', role: 'Lead cast', imagePath: 'asset:minova-symbol-color.svg', personId: 'demo-person-ava' },
+      { name: 'Noah Vale', role: 'Cast', imagePath: 'asset:minova-cinema-wordmark.png', personId: 'demo-person-noah' },
+      { name: 'Maya North', role: 'Director', imagePath: null, personId: 'demo-person-maya' },
     ],
   });
   const movies = [
@@ -311,6 +311,21 @@ function demoDetails(ratingKey) {
   return seasons.flatMap((item) => demoChildren(item.ratingKey)).find((item) => item.ratingKey === ratingKey) || null;
 }
 
+function demoPerson(credit = {}) {
+  const catalog = demoCatalog();
+  return {
+    personId: credit.personId || 'demo-person',
+    name: credit.name || 'Ava Stone',
+    role: credit.role || 'Actor',
+    imagePath: credit.imagePath || 'asset:minova-symbol-color.svg',
+    biography: `${credit.name || 'Ava Stone'} is a performer whose work spans character-driven drama, thrillers, and cinematic adventure. This preview demonstrates the actor profile layout; connected Plex libraries use the matching person record and open reference data.`,
+    sourceLabel: 'Profile preview',
+    sourceUrl: null,
+    imdbUrl: 'https://www.imdb.com/find/?q=Ava%20Stone&s=nm',
+    media: [...catalog.movies.slice(0, 6), ...catalog.shows.slice(0, 3)],
+  };
+}
+
 async function installMediaProtocol() {
   protocol.handle('minova-plex', async (request) => {
     try {
@@ -360,6 +375,7 @@ function registerIpc() {
       connected: Boolean(connection), server: connection?.server || '', quality: connection?.quality || 'original',
       enhancement: stored.enhancement || 'balanced', volume: Number.isFinite(stored.volume) ? stored.volume : 100,
       splitAlphabetical: stored.splitAlphabetical === true,
+      autoplayNextEpisode: stored.autoplayNextEpisode !== false,
       demoMode, captureView,
     };
   });
@@ -420,6 +436,7 @@ function registerIpc() {
       enhancement: preferences.enhancement || stored.enhancement || 'balanced',
       volume: Number.isFinite(preferences.volume) ? preferences.volume : (Number.isFinite(stored.volume) ? stored.volume : 100),
       splitAlphabetical: typeof preferences.splitAlphabetical === 'boolean' ? preferences.splitAlphabetical : stored.splitAlphabetical === true,
+      autoplayNextEpisode: typeof preferences.autoplayNextEpisode === 'boolean' ? preferences.autoplayNextEpisode : stored.autoplayNextEpisode !== false,
     });
     return true;
   });
@@ -436,6 +453,7 @@ function registerIpc() {
   ipcMain.handle('media:details', (_event, key) => demoMode ? demoDetails(key) : requireClient().details(key));
   ipcMain.handle('media:children', (_event, key) => demoMode ? demoChildren(key) : requireClient().children(key));
   ipcMain.handle('media:collection', (_event, key) => demoMode ? demoCatalog().movies : requireClient().collection(key));
+  ipcMain.handle('media:person', (_event, credit) => demoMode ? demoPerson(credit) : requireClient().person(credit));
   ipcMain.handle('media:set-watched', (_event, { key, watched }) => demoMode || requireClient().setWatched(key, watched));
   ipcMain.handle('media:set-watchlisted', (_event, { providerRatingKey, watchlisted }) => demoMode || requireClient().setWatchlisted(providerRatingKey, watchlisted));
   ipcMain.handle('media:timeline', (_event, { item, state, timeMs }) => demoMode || requireClient().timeline(item, state, timeMs));
@@ -659,7 +677,25 @@ async function startNativePlayback(key, quality = 'original') {
   nativePlayer.on('notice', (message) => {
     if (overlay && !overlay.isDestroyed()) overlay.webContents.send('native-player:notice', message);
   });
-  nativePlayer.on('ended', () => closeNativePlayback(true).catch(() => {}));
+  const playbackPlayer = nativePlayer;
+  nativePlayer.on('ended', async (completion = {}) => {
+    if (nativePlayer !== playbackPlayer) return;
+    const autoplayEnabled = readStored().autoplayNextEpisode !== false;
+    const nextEpisode = item.kind === 'episode'
+      ? await client.nextEpisode(item).catch(() => null)
+      : null;
+    await closeNativePlayback(true, {
+      reason: 'ended',
+      completed: {
+        ratingKey: item.ratingKey,
+        kind: item.kind,
+        grandparentRatingKey: item.grandparentRatingKey || null,
+      },
+      watchedSynced: completion.watchedSynced === true,
+      nextEpisode,
+      autoplayEnabled,
+    }).catch(() => {});
+  });
   await nativePlayer.start();
   syncPlayerOverlay();
   return {
@@ -668,7 +704,7 @@ async function startNativePlayback(key, quality = 'original') {
   };
 }
 
-async function closeNativePlayback(notifyRenderer) {
+async function closeNativePlayback(notifyRenderer, payload = { reason: 'closed' }) {
   if (miniPlayerRestoreState && mainWindow && !mainWindow.isDestroyed()) await setMiniPlayer(false);
   const player = nativePlayer;
   nativePlayer = null;
@@ -679,7 +715,7 @@ async function closeNativePlayback(notifyRenderer) {
     closingPlayerOverlay = false;
     playerOverlay = null;
   }
-  if (notifyRenderer && mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('native-player:closed');
+  if (notifyRenderer && mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('native-player:closed', payload);
   return true;
 }
 
@@ -877,7 +913,10 @@ async function runNativePlayerQa() {
       magentaRatio = sampled ? magenta / sampled : 1;
     }
     if (temporaryCapture) { try { fs.unlinkSync(capturePath); } catch {} }
-    await nativePlayer.execute('volume', 63);
+    await overlay.webContents.executeJavaScript("const slider = document.getElementById('volume'); slider.value = '63'; slider.dispatchEvent(new Event('input', { bubbles: true }))");
+    await new Promise((resolve) => setTimeout(resolve, 180));
+    const stateAfterVolumeSlider = nativePlayer.snapshot();
+    const volumeSliderKeepsPlaying = !stateAfterVolumeSlider.paused && Math.abs(stateAfterVolumeSlider.volume - 63) < 1;
     await nativePlayer.execute('enhancement', 'high');
     await nativePlayer.execute('toggle-pause');
     const state = nativePlayer.snapshot();
@@ -910,13 +949,14 @@ async function runNativePlayerQa() {
       await new Promise((resolve) => setTimeout(resolve, 80));
       await nativePlayer.captureComposedWindow(miniCapturePath);
     }
-    const miniDisabled = !(await setMiniPlayer(false));
+    await overlay.webContents.executeJavaScript("document.querySelector('[data-action=\"back\"]')?.click()");
     await new Promise((resolve) => setTimeout(resolve, 180));
+    const miniDisabled = !miniPlayerRestoreState;
     const restoredBounds = mainWindow.getNormalBounds();
     const miniPlayerRestores = miniDisabled && !mainWindow.isAlwaysOnTop()
       && JSON.stringify(restoredBounds) === JSON.stringify(normalBounds);
     report = {
-      passed: state.ready && state.videoSurfaceReady && !separateVideoWindow && videoLumaRange > 18 && magentaRatio < 0.2 && state.paused && Math.abs(state.volume - 63) < 1 && state.enhancement === 'high' && state.enhancementActive && miniPlayerWindow && miniPlayerUnpins && miniPlayerRepins && miniPlayerResizes && miniPlayerMoves && miniOverlayMatches && miniPlayerRestores,
+      passed: state.ready && state.videoSurfaceReady && !separateVideoWindow && videoLumaRange > 18 && magentaRatio < 0.2 && state.paused && Math.abs(state.volume - 63) < 1 && volumeSliderKeepsPlaying && state.enhancement === 'high' && state.enhancementActive && miniPlayerWindow && miniPlayerUnpins && miniPlayerRepins && miniPlayerResizes && miniPlayerMoves && miniOverlayMatches && miniPlayerRestores,
       state,
       checks: {
         embeddedNativeProcess: Boolean(nativePlayer.process && !nativePlayer.process.killed),
@@ -929,6 +969,7 @@ async function runNativePlayerQa() {
         mediaLoaded: state.ready,
         pauseControl: state.paused,
         volumeControl: Math.abs(state.volume - 63) < 1,
+        volumeSliderKeepsPlaying,
         shaderMode: state.enhancement === 'high' && state.enhancementActive,
         trackDiscovery: Array.isArray(state.tracks),
         miniPlayerWindow,
@@ -944,6 +985,7 @@ async function runNativePlayerQa() {
         miniOverlayMatches,
         miniPlayerCapture: miniCapturePath,
         miniPlayerRestores,
+        miniPlayerBackRestores: miniPlayerRestores,
       },
     };
   } catch (error) {
