@@ -50,7 +50,7 @@ libmpv is controlled over a private local IPC pipe. The Plex token remains in th
 
 The desktop application uses the separate application ID `com.minova.cinema.desktop`; it does not change the Android application ID, APK signing key, or Android release pipeline.
 
-Installed production builds check the public `minova-chromium/Minova-Cinema-Windows` GitHub Releases feed shortly after launch and every six hours while running. Updates download in the background and can be installed from Settings with **Install and restart**. Release assets must include the generated installer, blockmap, and `latest.yml` metadata.
+Installed production builds check the public `minova-chromium/Minova-Cinema-Windows` GitHub Releases feed shortly after launch and every six hours while running. Updates download in the background and can be installed from Settings with **Install and restart**. Release assets include the custom `Setup.exe` for manual downloads plus the updater-compatible `Update.exe`, its blockmap, and `latest.yml` metadata.
 
 ## License
 
