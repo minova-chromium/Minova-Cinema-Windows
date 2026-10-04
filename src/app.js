@@ -231,11 +231,30 @@ function viewingActivity(item) {
   return Number(item?.lastViewedAt || 0) || (item?.isWatched || Number(item?.viewedCount || 0) > 0 ? 1 : 0);
 }
 
-function recommendationScore(candidate, anchor, preferredGenres = new Map()) {
-  const shared = (candidate.genres || []).filter((genre) => anchor?.genres?.includes(genre)).length;
+function recommendationScore(candidate, anchor, preferredGenres = new Map(), genreCounts = new Map(), librarySize = 0) {
+  const sharedGenres = (candidate.genres || []).filter((genre) => anchor?.genres?.includes(genre));
+  const shared = sharedGenres.reduce((total, genre) => {
+    const frequency = Math.max(1, genreCounts.get(genre) || librarySize || 1);
+    return total + 80 + Math.min(140, (Math.max(1, librarySize) / frequency) * 24);
+  }, 0);
   const affinity = (candidate.genres || []).reduce((total, genre) => total + (preferredGenres.get(genre) || 0), 0);
-  return shared * 100 + affinity * 12 + Number(candidate.audienceRating || 0) * 2
+  return shared + affinity * 12 + Number(candidate.audienceRating || 0) * 2
     + Math.min(10, Math.max(0, Number(candidate.year || 0) - 2016)) + Number(candidate.addedAt || 0) / 1e10;
+}
+
+function genreCounts(items) {
+  const counts = new Map();
+  for (const item of items) {
+    for (const genre of new Set(item.genres || [])) counts.set(genre, (counts.get(genre) || 0) + 1);
+  }
+  return counts;
+}
+
+function distinctiveAnchorGenres(anchor, items, counts = genreCounts(items)) {
+  const ordered = [...new Set(anchor?.genres || [])]
+    .sort((left, right) => (counts.get(left) || items.length) - (counts.get(right) || items.length));
+  const distinctive = ordered.filter((genre) => (counts.get(genre) || items.length) <= Math.max(4, Math.ceil(items.length * .45)));
+  return distinctive.length ? distinctive : ordered.slice(0, Math.min(2, ordered.length));
 }
 
 function watchedAnchors(items) {
@@ -255,12 +274,15 @@ function preferredGenreWeights(items) {
 function recommendationRows(items, maximum = 2) {
   const anchors = watchedAnchors(items);
   const preferredGenres = preferredGenreWeights(items);
+  const counts = genreCounts(items);
   const used = new Set();
   const rows = [];
   for (const anchor of anchors) {
+    const matchGenres = distinctiveAnchorGenres(anchor, items, counts);
     const candidates = items.filter((candidate) => candidate.ratingKey !== anchor.ratingKey && !candidate.isWatched
-      && (candidate.genres || []).some((genre) => anchor.genres?.includes(genre)))
-      .sort((left, right) => recommendationScore(right, anchor, preferredGenres) - recommendationScore(left, anchor, preferredGenres))
+      && (candidate.genres || []).some((genre) => matchGenres.includes(genre)))
+      .sort((left, right) => recommendationScore(right, anchor, preferredGenres, counts, items.length)
+        - recommendationScore(left, anchor, preferredGenres, counts, items.length))
       .filter((candidate) => !used.has(candidate.ratingKey));
     if (candidates.length < 2) continue;
     const selected = candidates.slice(0, 24);
@@ -304,18 +326,47 @@ function watchAgain(items) {
   return watchedAnchors(items).filter((item) => item.isWatched);
 }
 
+function diversifiedRecommendations(items, exposure, limit = 24) {
+  const selected = uniqueTitles(items)
+    .map((item, rank) => ({ item, rank, exposure: exposure.get(item.ratingKey) || 0 }))
+    .sort((left, right) => left.exposure - right.exposure || left.rank - right.rank)
+    .slice(0, limit)
+    .map((entry) => entry.item);
+  for (const item of selected) exposure.set(item.ratingKey, (exposure.get(item.ratingKey) || 0) + 1);
+  return selected;
+}
+
+function recommendationOverlap(left, right) {
+  const leftKeys = new Set((left || []).map((item) => item.ratingKey));
+  const rightKeys = new Set((right || []).map((item) => item.ratingKey));
+  const smaller = Math.min(leftKeys.size, rightKeys.size);
+  if (!smaller) return 0;
+  return [...leftKeys].filter((key) => rightKeys.has(key)).length / smaller;
+}
+
 function homeShelves() {
   const { movies, shows, continueWatching, watchlist } = state.catalog;
   const library = uniqueTitles([...movies, ...shows]);
   const recentlyAdded = [...library].sort((left, right) => Number(right.addedAt || 0) - Number(left.addedAt || 0));
-  const personalRows = recommendationRows(library, 1);
+  const exposure = new Map();
+  const personalRows = recommendationRows(library, 1).map((row) => ({
+    ...row,
+    items: diversifiedRecommendations(row.items, exposure),
+  }));
+  const personalizedTopPicks = diversifiedRecommendations(topPicks(library), exposure);
   const favoriteRow = favoriteGenreRow(library);
+  const favoriteItems = favoriteRow ? diversifiedRecommendations(favoriteRow.items, exposure) : [];
+  const comparisonRows = [...personalRows.map((row) => row.items), personalizedTopPicks];
+  const diversifiedFavoriteRow = favoriteRow && favoriteItems.length >= 2
+    && comparisonRows.every((items) => recommendationOverlap(favoriteItems, items) < .8)
+    ? { ...favoriteRow, items: favoriteItems }
+    : null;
   return [
     shelf('Continue Watching', continueWatching, true),
     shelf('New Releases', newestReleases(library)),
     ...personalRows.map((row) => shelf(row.title, row.items)),
-    shelf('Top Picks for You', topPicks(library)),
-    favoriteRow ? shelf(favoriteRow.title, favoriteRow.items) : '',
+    shelf('Top Picks for You', personalizedTopPicks),
+    diversifiedFavoriteRow ? shelf(diversifiedFavoriteRow.title, diversifiedFavoriteRow.items) : '',
     shelf('Top Rated', topRated(library)),
     shelf('Hidden Gems', hiddenGems(library)),
     shelf('Recently Added', recentlyAdded),
@@ -1362,8 +1413,16 @@ window.__runMinovaQa = async function runMinovaQa() {
   const becauseAnchor = [...state.catalog.movies, ...state.catalog.shows].find((item) => item.title === becauseAnchorTitle);
   check('Home shows exactly one recent Because you watched shelf', becauseSections.length === 1 && becauseAnchorTitle === 'Parallel', `${becauseSections.length}:${becauseAnchorTitle}`);
   check('Because you watched never recommends the anchor itself', Boolean(becauseAnchor) && !becauseSections[0]?.querySelector(`[data-key="${becauseAnchor.ratingKey}"]`), becauseAnchor?.ratingKey || 'missing anchor');
-  check('Home offers several distinct recommendation types', homeTitles.includes('Top Rated') && homeTitles.includes('Hidden Gems') && homeTitles.includes('Watch Again') && homeTitles.some((title) => title.startsWith('More ')), homeTitles.join(', '));
+  check('Home offers several distinct recommendation types', homeTitles.includes('Top Rated') && homeTitles.includes('Hidden Gems') && homeTitles.includes('Watch Again') && homeTitles.length >= 7, homeTitles.join(', '));
   check('Home does not duplicate Movies or Series library lists', !homeTitles.includes('Movies') && !homeTitles.includes('Series'), homeTitles.join(', '));
+  const personalizedSections = [...document.querySelectorAll('.home-shelves .section')].filter((section) => {
+    const title = section.querySelector('.section-title')?.textContent || '';
+    return title.startsWith('Because you watched ') || title === 'Top Picks for You' || title.startsWith('More ');
+  });
+  const personalizedKeys = personalizedSections.map((section) => [...section.querySelectorAll('.media-card')].map((cardNode) => cardNode.dataset.key));
+  const leadingSignatures = personalizedKeys.map((keys) => keys.slice(0, 8).join('|'));
+  check('Personalized shelves do not repeat the same leading titles', new Set(leadingSignatures).size === leadingSignatures.length, leadingSignatures.join(' / '));
+  check('Personalized shelves stay curated instead of dumping the entire library', personalizedKeys.every((keys) => keys.length <= 24), personalizedKeys.map((keys) => keys.length).join(','));
   const scrollableSection = [...document.querySelectorAll('.home-shelves .section')].find((section) => !section.querySelector('.rail-arrow-right')?.disabled);
   check('Scrollable shelves show a clean heading-level right arrow', Boolean(scrollableSection) && !scrollableSection.querySelector('.rail-arrow-right')?.classList.contains('is-hidden'), scrollableSection ? 'visible' : 'missing');
   check('Shelf left arrow stays hidden before moving right', scrollableSection?.querySelector('.rail-arrow-left')?.classList.contains('is-hidden'), scrollableSection?.querySelector('.rail-arrow-left')?.className || 'missing');
