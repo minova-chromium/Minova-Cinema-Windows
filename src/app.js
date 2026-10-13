@@ -1847,7 +1847,8 @@ window.__runMinovaQa = async function runMinovaQa() {
   const detailBrand = document.querySelector('.cinematic-brand-header .brand-lockup');
   const detailCopy = document.querySelector('.cinematic-detail-copy h1');
   check('Detail wordmark and overview use one left content edge', Boolean(detailBrand && detailCopy) && Math.abs(detailBrand.getBoundingClientRect().left - detailCopy.getBoundingClientRect().left) < 2, `${detailBrand?.getBoundingClientRect().left}:${detailCopy?.getBoundingClientRect().left}`);
-  check('Movie overview uses its own readable display type', getComputedStyle(document.querySelector('.cinematic-detail-copy h1')).fontFamily.toLowerCase().includes('bahnschrift') && getComputedStyle(document.querySelector('.cinematic-detail-copy h1')).textTransform === 'none', getComputedStyle(document.querySelector('.cinematic-detail-copy h1')).fontFamily);
+  const detailTitleStyle = getComputedStyle(document.querySelector('.cinematic-detail-copy h1'));
+  check('Movie overview uses the established desktop title type', detailTitleStyle.fontFamily.toLowerCase().includes('inter') && detailTitleStyle.textTransform === 'none' && Number(detailTitleStyle.fontWeight) >= 600, `${detailTitleStyle.fontFamily}:${detailTitleStyle.fontWeight}:${detailTitleStyle.textTransform}`);
   check('Movie Cast & Crew uses actor portrait cards', Boolean(document.querySelector('.credit-card .credit-avatar img')), document.querySelectorAll('.credit-card .credit-avatar img').length);
   const firstCreditRole = document.querySelector('.cinematic-credits');
   check('Movie detail keeps director and cast in the hero', Boolean(firstCreditRole) && firstCreditRole.getBoundingClientRect().bottom <= innerHeight, firstCreditRole?.getBoundingClientRect().bottom);
@@ -1882,6 +1883,8 @@ window.__runMinovaQa = async function runMinovaQa() {
   document.querySelector('[data-tab="home"]').click(); await wait(140);
   check('Home returns focus to selected header tab', document.activeElement?.dataset?.tab === 'home', activeLabel());
   check('Home uses the same cinematic hero as Movies and TV Shows', Boolean(document.querySelector('.cinematic-home-page .cinematic-hero')) && Boolean(document.querySelector('.cinematic-home-page .cinematic-sidebar')), document.querySelector('.cinematic-home-page') ? 'cinematic' : 'missing');
+  const homeTitleNodes = [document.querySelector('.cinematic-home-page .cinematic-hero h1'), document.querySelector('.cinematic-home-page .cinematic-card-title'), document.querySelector('.cinematic-home-page .cinematic-poster-copy strong')].filter(Boolean);
+  check('Featured, landscape, and poster titles share the desktop font', homeTitleNodes.length === 3 && homeTitleNodes.every((node) => { const style = getComputedStyle(node); return style.fontFamily.toLowerCase().includes('inter') && style.textTransform === 'none' && Number(style.fontWeight) >= 600; }), homeTitleNodes.map((node) => { const style = getComputedStyle(node); return `${style.fontFamily}:${style.fontWeight}:${style.textTransform}`; }).join(' / '));
   const homeTitles = [...document.querySelectorAll('.home-shelves .section-title')].map((title) => title.textContent);
   const homeActions = document.querySelector('.cinematic-home-page .cinematic-hero .actions');
   const continueHeading = document.querySelector('.home-shelves .cinematic-section-heading-copy');

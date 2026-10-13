@@ -262,7 +262,7 @@ body.fullscreen .content, body.fullscreen .detail-bg { inset-block-start: 0; }
 .credit-card .credit-role { display: block; margin-top: 2px; overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Isolated cinematic Movies + TV trial */
-.cinematic-page { --cinema-rail: 86px; --cinema-gutter: clamp(34px, 3.4vw, 54px); position: relative; color: var(--white); background: #050a0f; }
+.cinematic-page { --cinema-rail: 86px; --cinema-gutter: clamp(34px, 3.4vw, 54px); --cinema-title-font: Inter, "Segoe UI Variable Display", "Segoe UI", Arial, sans-serif; position: relative; color: var(--white); background: #050a0f; }
 .cinematic-sidebar { position: fixed; z-index: 80; inset: 36px auto 0 0; display: flex; width: var(--cinema-rail); flex-direction: column; align-items: center; padding: 18px 0 20px; border-right: 1px solid rgba(134,181,204,.08); background: rgba(3,10,15,.9); box-shadow: 16px 0 60px rgba(0,0,0,.14); backdrop-filter: blur(18px); }
 .cinematic-side-brand { display: grid; width: 54px; height: 54px; padding: 8px; place-items: center; border-radius: 50%; background: transparent; }
 .cinematic-side-brand img { width: 100%; height: 100%; object-fit: contain; }
@@ -294,7 +294,7 @@ body.fullscreen .content, body.fullscreen .detail-bg { inset-block-start: 0; }
 .cinematic-subnav button.active::after, .cinematic-subnav button:focus-visible::after { content: ""; position: absolute; right: 0; bottom: 0; left: 0; height: 3px; border-radius: 3px; background: var(--cyan); box-shadow: 0 0 14px rgba(22,216,228,.45); }
 .cinematic-hero-copy { width: min(720px, 56vw); }
 .cinematic-kicker { display: block; margin-bottom: 10px; color: var(--cyan); font-size: 11px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; }
-.cinematic-hero h1, .cinematic-detail-copy h1 { margin: 0; color: #f9fbfd; font-size: clamp(48px, 5vw, 84px); font-weight: 460; line-height: .98; letter-spacing: .13em; text-transform: uppercase; text-shadow: 0 4px 30px rgba(0,0,0,.5); }
+.cinematic-hero h1, .cinematic-detail-copy h1 { margin: 0; color: #f9fbfd; font-family: var(--cinema-title-font); font-size: clamp(48px, 5vw, 84px); font-weight: 700; line-height: 1; letter-spacing: -.04em; text-transform: none; text-shadow: 0 4px 30px rgba(0,0,0,.5); }
 .cinematic-meta { margin: 19px 0 0; color: #d9e3eb; font-size: 17px; font-weight: 600; letter-spacing: .04em; }
 .cinematic-summary { display: -webkit-box; max-width: 650px; margin: 16px 0 0; overflow: hidden; color: #c3d0da; font-size: 19px; line-height: 1.5; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .cinematic-actions { align-items: center; gap: 16px; margin-top: 25px; }
@@ -319,7 +319,7 @@ body.fullscreen .content, body.fullscreen .detail-bg { inset-block-start: 0; }
 .cinematic-card:nth-child(4n+3) .cinematic-card-fallback { background: radial-gradient(circle at 60% 30%, rgba(36,211,181,.38), transparent 24%), linear-gradient(135deg, #143a38, #071018 70%); }
 .cinematic-card:nth-child(4n) .cinematic-card-fallback { background: radial-gradient(circle at 68% 30%, rgba(255,171,63,.38), transparent 24%), linear-gradient(135deg, #3e2816, #071018 70%); }
 .cinematic-card-shade { position: absolute; inset: 35% 0 0; background: linear-gradient(transparent, rgba(2,7,11,.94)); }
-.cinematic-card-title { position: absolute; z-index: 2; right: 14px; bottom: 16px; left: 14px; overflow: hidden; color: #f7fafc; font-size: 15px; font-weight: 680; letter-spacing: .08em; text-align: left; text-overflow: ellipsis; text-shadow: 0 2px 8px #000; text-transform: uppercase; white-space: nowrap; }
+.cinematic-card-title { position: absolute; z-index: 2; right: 14px; bottom: 16px; left: 14px; overflow: hidden; color: #f7fafc; font-family: var(--cinema-title-font); font-size: 15px; font-weight: 700; letter-spacing: -.015em; text-align: left; text-overflow: ellipsis; text-shadow: 0 2px 8px #000; text-transform: none; white-space: nowrap; }
 .cinematic-card .progress { right: 12px; bottom: 7px; left: 12px; height: 4px; overflow: hidden; border-radius: 3px; background: rgba(151,177,194,.32); }
 .cinematic-card img { filter: saturate(.9) contrast(1.04); }
 .cinematic-poster-card.media-card { display: flex; height: auto; min-height: 0; flex: 0 0 clamp(150px, 12.2vw, 196px); aspect-ratio: auto; align-self: flex-start; flex-direction: column; overflow: visible; border: 0; border-radius: 10px; background: transparent; box-shadow: none; text-align: left; }
@@ -331,7 +331,7 @@ body.fullscreen .content, body.fullscreen .detail-bg { inset-block-start: 0; }
 .cinematic-poster-card:focus-visible .cinematic-poster-art { border: 2px solid var(--cyan); box-shadow: 0 15px 42px rgba(0,0,0,.5), 0 9px 26px rgba(22,216,228,.18); }
 .cinematic-poster-art > img { width: 100%; height: 100%; object-fit: cover; }
 .cinematic-poster-copy { display: block; min-width: 0; padding: 11px 3px 3px; }
-.cinematic-poster-copy strong { display: block; overflow: hidden; color: #f2f6f9; font-size: 14px; font-weight: 690; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.cinematic-poster-copy strong { display: block; overflow: hidden; color: #f2f6f9; font-family: var(--cinema-title-font); font-size: 14px; font-weight: 700; line-height: 1.25; letter-spacing: -.02em; text-overflow: ellipsis; white-space: nowrap; }
 .cinematic-poster-copy small { display: block; margin-top: 4px; overflow: hidden; color: #718497; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .cinematic-poster-card .badge { top: 8px; right: 8px; }
 .cinematic-poster-card .progress { right: 8px; bottom: 8px; left: 8px; }
@@ -358,7 +358,7 @@ body.pointer-navigation .credit-card:focus-visible .credit-avatar { border: 1px 
 .cinematic-detail-page .cinematic-hero-bg { height: min(720px, 78vh); }
 .cinematic-detail-page .cinematic-detail-scroll { padding-bottom: 70px; }
 .cinematic-detail-copy { z-index: 20; min-height: min(610px, 68vh); width: min(760px, 58vw); overflow: visible; padding: 118px 0 58px var(--cinema-gutter); font-family: "Segoe UI Variable Text", "Segoe UI", sans-serif; }
-.cinematic-detail-copy h1 { max-width: 760px; font-family: Bahnschrift, "Segoe UI Variable Display", "Segoe UI", sans-serif; font-size: clamp(46px, 4.35vw, 72px); font-weight: 350; line-height: 1.02; letter-spacing: .035em; text-transform: none; }
+.cinematic-detail-copy h1 { max-width: 760px; font-family: var(--cinema-title-font); font-size: clamp(46px, 4.35vw, 72px); font-weight: 700; line-height: 1.02; letter-spacing: -.04em; text-transform: none; }
 .cinematic-detail-copy .detail-subnav { margin-bottom: 44px; }
 .cinematic-detail-copy .detail-summary { display: -webkit-box; max-width: 680px; margin: 19px 0 0; overflow: hidden; color: #d0d9e0; font-size: 19px; line-height: 1.52; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
 .cinematic-round-action { display: grid; width: 56px; min-height: 56px; padding: 0; place-items: center; border: 1px solid rgba(151,177,194,.48); border-radius: 50%; color: var(--white); background: rgba(8,18,26,.58); font-size: 24px; backdrop-filter: blur(12px); }
@@ -418,7 +418,7 @@ body.pointer-navigation .credit-card:focus-visible .credit-avatar { border: 1px 
 .cinematic-collection-collage i:nth-child(2) { z-index: 2; background: linear-gradient(155deg, rgba(23,105,255,.34), rgba(7,16,24,.98) 72%); transform: scale(1.08) translateY(-3px); }
 .cinematic-collection-collage i:nth-child(3) { background: linear-gradient(155deg, rgba(36,211,181,.27), rgba(7,16,24,.98) 72%); transform: rotate(5deg) translateY(5px); }
 .cinematic-collection-copy { display: block; padding: 11px 3px 3px; text-align: left; }
-.cinematic-collection-copy strong { display: block; overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.cinematic-collection-copy strong { display: block; overflow: hidden; font-family: var(--cinema-title-font); font-size: 14px; font-weight: 700; letter-spacing: -.02em; text-overflow: ellipsis; white-space: nowrap; }
 .cinematic-collection-copy small { display: block; margin-top: 5px; color: #8295a7; font-size: 12px; }
 .cinematic-search-field { display: flex; width: min(920px, 100%); height: 64px; align-items: center; gap: 13px; margin-bottom: 32px; padding: 0 19px; border: 1px solid rgba(146,174,193,.28); border-radius: 12px; background: rgba(13,25,35,.82); box-shadow: 0 16px 38px rgba(0,0,0,.16); }
 .cinematic-search-field:focus-within { border-color: var(--cyan); box-shadow: 0 0 0 4px rgba(22,216,228,.1), 0 18px 42px rgba(0,0,0,.3); }
