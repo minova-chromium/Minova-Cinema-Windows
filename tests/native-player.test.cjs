@@ -4,11 +4,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { NativeMpvPlayer } = require('../src/native-player.cjs');
 
-test('native playback follows the display clock and smooths refresh-rate mismatch', () => {
+test('native playback follows the audio clock without interpolation drift', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'native-host', 'LibMpvHost.cs'), 'utf8');
-  assert.match(source, /\{ "video-sync", "display-resample" \}/);
-  assert.match(source, /\{ "interpolation", "yes" \}/);
-  assert.match(source, /\{ "tscale", "oversample" \}/);
+  assert.match(source, /\{ "video-sync", "audio" \}/);
+  assert.match(source, /\{ "interpolation", "no" \}/);
+  assert.doesNotMatch(source, /\{ "tscale",/);
 });
 
 test('handoff pauses and commits the exact position without overwriting it on close', async () => {

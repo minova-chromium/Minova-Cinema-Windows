@@ -196,10 +196,9 @@ namespace MinovaCinema.NativeHost
                 { "border", "no" }, { "wid", hwnd.ToInt64().ToString() },
                 { "input-ipc-server", pipeName }, { "vo", "gpu-next" },
                 { "gpu-api", "d3d11" }, { "hwdec", "auto-safe" },
-                { "video-sync", "display-resample" }, { "initial-audio-sync", "yes" },
+                { "video-sync", "audio" }, { "initial-audio-sync", "yes" },
                 { "video-latency-hacks", "yes" }, { "framedrop", "vo" },
-                { "audio-pitch-correction", "yes" }, { "interpolation", "yes" },
-                { "tscale", "oversample" },
+                { "audio-pitch-correction", "yes" }, { "interpolation", "no" },
                 { "audio-client-name", "Minova Cinema" }, { "gpu-shader-cache-dir", shaderCache },
             };
             for (int index = 0; index < options.GetLength(0); index++)
