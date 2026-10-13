@@ -499,7 +499,7 @@ function cinematicSidebar(active = state.tab) {
 }
 
 function cinematicBrandHeader({ back = false } = {}) {
-  return `<div class="cinematic-brand-header">
+  return `<div class="cinematic-brand-header${back ? ' has-back' : ''}">
     ${back ? '<button class="cinematic-back" data-action="back" aria-label="Back">‹</button>' : ''}
     ${logoMarkup('compact')}
   </div>`;
@@ -643,18 +643,34 @@ function cinematicCollectionsPage() {
   </section>`);
 }
 
+function normalizeTitleSearch(value) {
+  return String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function titleMatchesSearch(item, query) {
+  const normalizedQuery = normalizeTitleSearch(query);
+  return Boolean(normalizedQuery) && normalizeTitleSearch(item?.title).includes(normalizedQuery);
+}
+
+function unfilteredCinematicSearchResults() {
+  return [...state.catalog.movies, ...state.catalog.shows].filter((item) => titleMatchesSearch(item, state.search));
+}
+
 function cinematicSearchResults() {
-  const query = state.search.trim().toLowerCase();
   const all = [...state.catalog.movies, ...state.catalog.shows];
-  const matches = query ? all.filter((item) => [item.title, item.summary, ...(item.genres || [])].some((value) => String(value || '').toLowerCase().includes(query))) : [];
+  const matches = state.search.trim() ? all.filter((item) => titleMatchesSearch(item, state.search)) : [];
   if (state.searchFilter === 'movies') return matches.filter((item) => item.kind !== 'show');
   if (state.searchFilter === 'series') return matches.filter((item) => item.kind === 'show');
   return matches;
 }
 
 function cinematicSearchFilters() {
-  const query = state.search.trim().toLowerCase();
-  const matches = query ? [...state.catalog.movies, ...state.catalog.shows].filter((item) => [item.title, item.summary, ...(item.genres || [])].some((value) => String(value || '').toLowerCase().includes(query))) : [];
+  const matches = state.search.trim() ? unfilteredCinematicSearchResults() : [];
   const filters = [
     ['all', 'All', matches.length],
     ['movies', 'Movies', matches.filter((item) => item.kind !== 'show').length],
@@ -671,7 +687,7 @@ function cinematicSearchResultsMarkup() {
     count: label,
     filters: cinematicSearchFilters(),
     cards: results.map((item) => cinematicCard(item, { portrait: true })).join(''),
-    empty: query && !results.length ? '<div class="cinematic-empty"><strong>No results</strong><span>Try another title, description, or genre.</span></div>' : '',
+    empty: query && !results.length ? '<div class="cinematic-empty"><strong>No matching titles</strong><span>Try another movie or TV show title.</span></div>' : '',
     hint: query ? '' : '<div class="cinematic-search-hint">Start typing to explore your cinema.</div>',
   };
 }
@@ -679,8 +695,8 @@ function cinematicSearchResultsMarkup() {
 function cinematicSearchPage() {
   const results = cinematicSearchResultsMarkup();
   return cinematicUtilityShell('search', 'cinematic-search-page', `<section class="cinematic-utility-content">
-    <div class="cinematic-page-heading"><span class="cinematic-kicker">Find your next story</span><h1>Search</h1><p>Search every movie, series, genre, and description in your Plex library.</p></div>
-    <label class="cinematic-search-field"><span aria-hidden="true">⌕</span><input id="search-input" value="${esc(state.search)}" placeholder="Search movies, TV shows, or genres…" autocomplete="off" autofocus></label>
+    <div class="cinematic-page-heading"><span class="cinematic-kicker">Find your next story</span><h1>Search</h1><p>Search movie and TV show titles in your Plex library.</p></div>
+    <label class="cinematic-search-field"><span aria-hidden="true">⌕</span><input id="search-input" value="${esc(state.search)}" placeholder="Search movie and TV show titles…" autocomplete="off" autofocus></label>
     <div class="cinematic-search-tools"><div id="search-result-count">${results.count}</div><div id="search-filters" class="cinematic-filter-chips" aria-label="Filter search results">${results.filters}</div></div>
     <div id="search-results" class="grid cinematic-result-grid cinematic-poster-grid">${results.cards}</div>
     <div id="search-empty">${results.empty}</div>
@@ -995,8 +1011,25 @@ function bindDynamicMediaCards(root) {
     if (state.tab === 'home' && item) updateHero(item);
     if (state.route.type === 'browse' && ['home', 'movies', 'series'].includes(state.tab) && item) updateCinematicHero(item);
     if (node.matches('.cinematic-episode-card')) updateCinematicEpisode(node);
-    node.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+    revealRailCard(node, 'smooth');
   }));
+}
+
+function revealRailCard(node, behavior = 'auto') {
+  const rail = node?.closest('.rail');
+  if (!rail) return false;
+  const cardRect = node.getBoundingClientRect();
+  const railRect = rail.getBoundingClientRect();
+  const styles = getComputedStyle(rail);
+  const leftInset = Number.parseFloat(styles.scrollPaddingLeft) || Number.parseFloat(styles.paddingLeft) || 0;
+  const rightInset = Number.parseFloat(styles.scrollPaddingRight) || Number.parseFloat(styles.paddingRight) || 0;
+  let delta = 0;
+  if (cardRect.left < railRect.left + leftInset) delta = cardRect.left - railRect.left - leftInset;
+  else if (cardRect.right > railRect.right - rightInset) delta = cardRect.right - railRect.right + rightInset;
+  if (Math.abs(delta) > 1) rail.scrollBy({ left: delta, behavior });
+  (node.closest('.section, .detail-section') || node).scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'auto' });
+  setTimeout(() => updateRailArrows(node.closest('.section')), behavior === 'smooth' ? 360 : 0);
+  return true;
 }
 
 function updateRailArrows(shell) {
@@ -1053,7 +1086,7 @@ function initialFocus() {
 function focusNode(node) {
   if (!node) return false;
   node.focus({ preventScroll: true });
-  node.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'auto' });
+  if (!revealRailCard(node)) node.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'auto' });
   return true;
 }
 
@@ -1801,6 +1834,10 @@ window.__runMinovaQa = async function runMinovaQa() {
   check('Cinematic card opens details', state.route.type === 'detail' && Boolean(document.querySelector('.cinematic-detail-copy')), state.route.type);
   check('Details receives an action focus target', Boolean(document.activeElement?.closest('.detail-copy .actions')), activeLabel());
   check('Details reserves a cinematic artwork layer', Boolean(document.querySelector('.detail-bg')), document.querySelector('.detail-bg')?.className);
+  const detailBrand = document.querySelector('.cinematic-brand-header .brand-lockup');
+  const detailCopy = document.querySelector('.cinematic-detail-copy h1');
+  check('Detail wordmark and overview use one left content edge', Boolean(detailBrand && detailCopy) && Math.abs(detailBrand.getBoundingClientRect().left - detailCopy.getBoundingClientRect().left) < 2, `${detailBrand?.getBoundingClientRect().left}:${detailCopy?.getBoundingClientRect().left}`);
+  check('Movie overview uses its own readable display type', getComputedStyle(document.querySelector('.cinematic-detail-copy h1')).fontFamily.toLowerCase().includes('bahnschrift') && getComputedStyle(document.querySelector('.cinematic-detail-copy h1')).textTransform === 'none', getComputedStyle(document.querySelector('.cinematic-detail-copy h1')).fontFamily);
   check('Movie Cast & Crew uses actor portrait cards', Boolean(document.querySelector('.credit-card .credit-avatar img')), document.querySelectorAll('.credit-card .credit-avatar img').length);
   const firstCreditRole = document.querySelector('.cinematic-credits');
   check('Movie detail keeps director and cast in the hero', Boolean(firstCreditRole) && firstCreditRole.getBoundingClientRect().bottom <= innerHeight, firstCreditRole?.getBoundingClientRect().bottom);
@@ -1811,6 +1848,11 @@ window.__runMinovaQa = async function runMinovaQa() {
   check('Avatar Cast & Crew emerges directly from the movie hero', Boolean(document.querySelector('.cast-section .credit-avatar')) && document.querySelector('.cast-section').getBoundingClientRect().top < innerHeight, document.querySelector('.cast-section')?.getBoundingClientRect().top || 'missing');
   check('More Like This follows the avatar cast row', Boolean(document.querySelector('.cinematic-related .cinematic-card')) && document.querySelector('.cinematic-related').getBoundingClientRect().top > document.querySelector('.cast-section').getBoundingClientRect().top, document.querySelector('.cinematic-related')?.getBoundingClientRect().top || 'missing');
   check('More Like This uses portrait title cards', Boolean(document.querySelector('.cinematic-related .cinematic-poster-card')), document.querySelector('.cinematic-related .cinematic-card')?.className || 'missing');
+  const detailScroller = document.querySelector('.cinematic-detail-scroll');
+  const detailBrandTop = document.querySelector('.cinematic-brand-header')?.getBoundingClientRect().top;
+  detailScroller.scrollTop = 220; await wait(80);
+  check('Detail wordmark stays fixed while the overview scrolls', Math.abs((document.querySelector('.cinematic-brand-header')?.getBoundingClientRect().top || 0) - detailBrandTop) < 1, `${detailBrandTop}:${document.querySelector('.cinematic-brand-header')?.getBoundingClientRect().top}`);
+  detailScroller.scrollTop = 0; await wait(40);
   document.querySelector('.cinematic-credit[data-action="person"]')?.click(); await wait(180);
   check('Cast card opens a Minova actor profile', state.route.type === 'person' && Boolean(document.querySelector('.person-page .person-biography')), state.route.type);
   check('Actor profile lists titles from the connected library', document.querySelectorAll('.person-page .media-card').length > 0, document.querySelectorAll('.person-page .media-card').length);
@@ -1839,6 +1881,17 @@ window.__runMinovaQa = async function runMinovaQa() {
   check('Because you watched never recommends the anchor itself', Boolean(becauseAnchor) && !becauseSections[0]?.querySelector(`[data-key="${becauseAnchor.ratingKey}"]`), becauseAnchor?.ratingKey || 'missing anchor');
   check('Home offers several distinct recommendation types', homeTitles.includes('Top Rated') && homeTitles.includes('Hidden Gems') && homeTitles.includes('Watch Again') && homeTitles.length >= 7, homeTitles.join(', '));
   check('Home does not duplicate Movies or Series library lists', !homeTitles.includes('Movies') && !homeTitles.includes('Series'), homeTitles.join(', '));
+  const posterSections = [...document.querySelectorAll('.home-shelves .cinematic-poster-section')];
+  const posterLeftEdges = posterSections.map((section) => section.querySelector('.cinematic-poster-card')?.getBoundingClientRect().left).filter(Number.isFinite);
+  check('Every portrait shelf shares the same left content edge', posterLeftEdges.length > 2 && Math.max(...posterLeftEdges) - Math.min(...posterLeftEdges) < 2, posterLeftEdges.join(','));
+  const firstPosterSection = posterSections[0];
+  const firstPosterHeading = firstPosterSection?.querySelector('.cinematic-section-heading-copy');
+  const firstPosterCard = firstPosterSection?.querySelector('.cinematic-poster-card');
+  check('Shelf headings and cards use one horizontal gutter', Boolean(firstPosterHeading && firstPosterCard) && Math.abs(firstPosterHeading.getBoundingClientRect().left - firstPosterCard.getBoundingClientRect().left) < 2, `${firstPosterHeading?.getBoundingClientRect().left}:${firstPosterCard?.getBoundingClientRect().left}`);
+  const firstPosterRail = firstPosterSection?.querySelector('.rail');
+  if (firstPosterRail) firstPosterRail.scrollLeft = 0;
+  firstPosterCard?.focus(); await wait(420);
+  check('Focusing the first poster does not introduce a rail offset', Number(firstPosterRail?.scrollLeft || 0) < 2, firstPosterRail?.scrollLeft || 0);
   const completedContinueItem = { ...state.catalog.movies[0], ratingKey: 'qa-completed-title', title: 'Completed QA Title', isWatched: true, progress: 1, viewOffsetMs: state.catalog.movies[0]?.durationMs || 1 };
   state.catalog.continueWatching.push(completedContinueItem); render(); await wait(100);
   check('Completed titles are excluded from Continue Watching', !document.querySelector('.home-shelves .section:first-child [data-key="qa-completed-title"]'), document.querySelector('.home-shelves .section:first-child')?.textContent.trim() || 'missing');
@@ -1892,6 +1945,7 @@ window.__runMinovaQa = async function runMinovaQa() {
 
   document.querySelector('[data-tab="search"]').click(); await wait(140);
   check('Search opens with the text field ready', document.activeElement?.id === 'search-input', activeLabel());
+  check('Search matches titles only, not unrelated summaries or genres', titleMatchesSearch({ title: 'Alice in Wonderland', summary: '' }, 'alice') && !titleMatchesSearch({ title: 'A Nightmare on Elm Street', summary: 'Alice has a nightmare', genres: ['Alice'] }, 'alice'), 'Alice in Wonderland / A Nightmare on Elm Street');
   const search = document.getElementById('search-input');
   search.value = 'horizon'; search.dispatchEvent(new Event('input', { bubbles: true })); await wait(100);
   check('Search results use portrait title cards', Boolean(document.querySelector('#search-results .cinematic-poster-card')), document.querySelector('#search-results .cinematic-card')?.className || 'missing');
