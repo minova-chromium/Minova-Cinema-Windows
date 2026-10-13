@@ -26,6 +26,7 @@ const state = {
 };
 let dismissedUpdateVersion = null;
 let nextUpTimer = null;
+let seasonSelectionRequest = 0;
 
 const tabs = [
   ['home', 'Home'], ['movies', 'Movies'], ['series', 'Series'],
@@ -502,10 +503,12 @@ function cinematicBrandHeader({ back = false } = {}) {
 }
 
 function cinematicCard(item, { episode = false, portrait = false } = {}) {
+  const isEpisode = episode || item.kind === 'episode';
   const imagePath = portrait ? item.posterPath || item.backdropPath : item.backdropPath || item.posterPath;
-  const subtitle = episode
-    ? `${item.episodeNumber || ''}  ${item.title || 'Episode'}${item.durationMs ? `  ·  ${formatTime(item.durationMs)}` : ''}`
-    : item.title;
+  const [seriesTitle = '', episodeCodeFromMetadata = ''] = String(item.secondaryTitle || '').split(/\s*•\s*/);
+  const episodeCode = episodeCodeFromMetadata || (item.seasonNumber && item.episodeNumber ? `S${item.seasonNumber} E${item.episodeNumber}` : item.episodeNumber ? `E${item.episodeNumber}` : '');
+  const episodeDetails = [episodeCode, item.title || 'Episode', item.durationMs ? formatTime(item.durationMs) : ''].filter(Boolean).join(' · ');
+  const subtitle = isEpisode ? seriesTitle || 'TV Episode' : item.title;
   if (portrait) {
     const type = item.kind === 'show' ? 'TV Show' : 'Movie';
     const details = [item.year, type].filter(Boolean).join(' · ');
@@ -514,11 +517,11 @@ function cinematicCard(item, { episode = false, portrait = false } = {}) {
       <span class="cinematic-poster-copy"><strong>${esc(item.title)}</strong><small>${esc(details)}</small></span>
     </button>`;
   }
-  return `<button class="media-card landscape cinematic-card${episode ? ' cinematic-episode-card' : ''}" data-action="${episode ? 'play' : 'open'}" data-key="${esc(item.ratingKey)}" data-focus-key="${esc(item.ratingKey)}" ${episode ? `data-episode-title="${esc(item.title)}" data-episode-number="${esc(item.episodeNumber || '')}" data-episode-summary="${esc(item.summary || '')}"` : ''} aria-label="${episode ? 'Play ' : 'Open '}${esc(item.title)}">
+  return `<button class="media-card landscape cinematic-card${isEpisode ? ' cinematic-episode-card' : ''}" data-action="${isEpisode ? 'play' : 'open'}" data-key="${esc(item.ratingKey)}" data-focus-key="${esc(item.ratingKey)}" ${isEpisode ? `data-episode-title="${esc(item.title)}" data-episode-number="${esc(item.episodeNumber || '')}" data-episode-summary="${esc(item.summary || '')}"` : ''} aria-label="${isEpisode ? 'Play ' : 'Open '}${esc(item.title)}${isEpisode && seriesTitle ? ` from ${esc(seriesTitle)}` : ''}">
     ${imagePath ? `<img src="${art(imagePath)}" alt="">` : '<span class="cinematic-card-fallback" aria-hidden="true"></span>'}
     ${item.isWatched ? '<span class="badge">✓</span>' : ''}
     <span class="cinematic-card-shade"></span>
-    <span class="cinematic-card-title">${esc(subtitle)}</span>
+    <span class="cinematic-card-title">${isEpisode ? `<strong>${esc(subtitle)}</strong><small>${esc(episodeDetails)}</small>` : esc(subtitle)}</span>
     ${item.progress > 0 && item.progress < .98 ? `<span class="progress"><span style="width:${Math.round(item.progress * 100)}%"></span></span>` : ''}
   </button>`;
 }
@@ -1280,6 +1283,17 @@ function navigateDpad(key) {
     if (key === 'ArrowDown') return focusNode(document.querySelector('.section .media-card, .detail-section .media-card, .detail-section .credit-card'));
   }
 
+  const seasonTabs = active.closest('.cinematic-season-tabs');
+  if (seasonTabs) {
+    const buttons = visibleElements('[data-action="season"]', seasonTabs);
+    const index = buttons.indexOf(active);
+    if (key === 'ArrowLeft') return focusNode(buttons[index - 1]);
+    if (key === 'ArrowRight') return focusNode(buttons[index + 1]);
+    if (key === 'ArrowUp') return focusNode(document.querySelector('.cinematic-series-detail .cinematic-actions button'));
+    if (key === 'ArrowDown') return focusNode(document.querySelector('.cinematic-series-content .cinematic-episode-card'));
+    return false;
+  }
+
   const toolbar = active.closest('.toolbar');
   if (toolbar) {
     const controls = visibleElements('button', toolbar); const index = controls.indexOf(active);
@@ -1508,6 +1522,7 @@ async function resolveSeriesPlayback(show, seasons) {
 }
 
 async function openDetails(key) {
+  seasonSelectionRequest += 1;
   pushRoute({ type: 'detail', item: findItem(key) || { ratingKey: key, title: 'Loading…' }, children: [] });
   try {
     const item = await window.minova.details(key);
@@ -1517,6 +1532,37 @@ async function openDetails(key) {
     const episodes = activeSeason ? await window.minova.children(activeSeason.ratingKey).catch(() => []) : [];
     state.route = { type: 'detail', item: item || findItem(key), children, seriesPlayback, activeSeasonKey: activeSeason?.ratingKey || null, episodes }; render();
   } catch (error) { showToast(errorMessage(error)); goBack(); }
+}
+
+function focusSeason(key) {
+  requestAnimationFrame(() => document.querySelector(`.cinematic-season-tabs [data-key="${CSS.escape(key)}"]`)?.focus());
+}
+
+async function selectSeason(key) {
+  const route = state.route;
+  if (route.type !== 'detail' || route.item?.kind !== 'show') return;
+  if (!route.children?.some((season) => season.ratingKey === key)) return;
+
+  const request = ++seasonSelectionRequest;
+  const previousSeasonKey = route.activeSeasonKey;
+  const previousEpisodes = route.episodes || [];
+  state.route = { ...route, activeSeasonKey: key, episodes: [] };
+  render();
+  focusSeason(key);
+
+  try {
+    const episodes = (await window.minova.children(key)).filter((item) => item.kind === 'episode');
+    if (request !== seasonSelectionRequest || state.route.type !== 'detail' || state.route.activeSeasonKey !== key) return;
+    state.route = { ...state.route, episodes };
+    render();
+    focusSeason(key);
+  } catch (error) {
+    if (request !== seasonSelectionRequest || state.route.type !== 'detail' || state.route.activeSeasonKey !== key) return;
+    state.route = { ...state.route, activeSeasonKey: previousSeasonKey, episodes: previousEpisodes };
+    render();
+    if (previousSeasonKey) focusSeason(previousSeasonKey);
+    showToast(`Could not load this season: ${errorMessage(error)}`);
+  }
 }
 
 async function openCollection(key) {
@@ -1617,10 +1663,7 @@ document.addEventListener('click', async (event) => {
     }
   }
   else if (action === 'season') {
-    const episodes = await window.minova.children(key).catch(() => []);
-    state.route = { ...state.route, activeSeasonKey: key, episodes };
-    render();
-    requestAnimationFrame(() => document.querySelector(`.cinematic-season-tabs [data-key="${CSS.escape(key)}"]`)?.focus());
+    await selectSeason(key);
   }
   else if (action === 'alpha-jump') jumpToLetter(target.dataset.letter);
   else if (action === 'sync') await syncCatalog(target);
@@ -2016,6 +2059,7 @@ window.__runMinovaQa = async function runMinovaQa() {
   check('TV Shows leave breathing room between More Info and Continue Watching', Boolean(seriesLibraryActions && seriesFirstHeading) && seriesHeroShelfGap >= 24 && seriesHeroShelfGap <= 90, seriesHeroShelfGap);
   const seriesContinueCards = [...document.querySelectorAll('.cinematic-rows .cinematic-section:first-child .media-card')];
   check('TV Continue Watching contains only actual in-progress episodes', seriesContinueCards.length > 0 && seriesContinueCards.every((cardNode) => cardNode.classList.contains('cinematic-episode-card') && findItem(cardNode.dataset.key)?.kind === 'episode'), seriesContinueCards.map((cardNode) => `${cardNode.dataset.key}:${findItem(cardNode.dataset.key)?.kind}`).join(','));
+  check('Continue Watching episodes identify their TV show', seriesContinueCards.length > 0 && seriesContinueCards.every((cardNode) => { const item = findItem(cardNode.dataset.key); const showTitle = String(item?.secondaryTitle || '').split(/\s*•\s*/)[0]; return showTitle && cardNode.querySelector('.cinematic-card-title strong')?.textContent === showTitle && cardNode.querySelector('.cinematic-card-title small')?.textContent.includes(item.title); }), seriesContinueCards.map((cardNode) => cardNode.querySelector('.cinematic-card-title')?.textContent.trim()).join(' / '));
   check('TV library does not claim Plex titles are Minova originals', document.querySelector('.cinematic-hero .cinematic-kicker')?.textContent === 'From your TV library', document.querySelector('.cinematic-hero .cinematic-kicker')?.textContent || 'missing');
   document.querySelector('.rail .media-card[data-key="demo-6"]')?.click(); await wait(260);
   check('Series opens its detail screen', state.route.type === 'detail' && state.route.item?.kind === 'show', `${state.route.type}:${state.route.item?.kind}`);
@@ -2026,6 +2070,15 @@ window.__runMinovaQa = async function runMinovaQa() {
   const seasonLabel = document.querySelector('.cinematic-season-label');
   const seasonButtons = [...document.querySelectorAll('.cinematic-season-tabs [data-action="season"]')];
   check('Season selector uses a Season label with clickable numbers', seasonLabel?.textContent === 'Season' && seasonButtons.length > 0 && seasonButtons.every((button) => /^\d+$/.test(button.textContent.trim())), `${seasonLabel?.textContent || 'missing'}:${seasonButtons.map((button) => button.textContent.trim()).join(',')}`);
+  const secondSeason = seasonButtons[1];
+  const secondSeasonRect = secondSeason?.getBoundingClientRect();
+  const secondSeasonHit = secondSeasonRect ? document.elementFromPoint(secondSeasonRect.left + secondSeasonRect.width / 2, secondSeasonRect.top + secondSeasonRect.height / 2) : null;
+  check('Season buttons are not blocked by the overlapping detail panel', secondSeasonHit === secondSeason || secondSeasonHit?.closest('[data-action="season"]') === secondSeason, secondSeasonHit?.className || secondSeasonHit?.tagName || 'missing');
+  secondSeason?.click(); await wait(180);
+  check('Selecting a season loads and displays that season', state.route.activeSeasonKey === 'demo-6-season-2' && state.route.episodes?.length === 3 && state.route.episodes.every((episode) => episode.seasonNumber === 2) && document.querySelector('.cinematic-season-tabs [data-key="demo-6-season-2"]')?.classList.contains('active'), `${state.route.activeSeasonKey}:${state.route.episodes?.map((episode) => episode.seasonNumber).join(',')}`);
+  await press('ArrowRight');
+  check('Left and right keys move through season numbers', document.activeElement?.dataset?.key === 'demo-6-season-3', activeLabel());
+  document.querySelector('.cinematic-season-tabs [data-key="demo-6-season-1"]')?.click(); await wait(180);
   const seriesActions = document.querySelector('.cinematic-series-detail .cinematic-actions');
   const seriesTabs = document.querySelector('.cinematic-season-tabs');
   const actionTabsGap = (seriesTabs?.getBoundingClientRect().top || 0) - (seriesActions?.getBoundingClientRect().bottom || 0);

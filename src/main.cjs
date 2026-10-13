@@ -283,29 +283,30 @@ function demoChildren(ratingKey) {
   const catalog = demoCatalog();
   const show = catalog.shows.find((item) => item.ratingKey === ratingKey);
   if (show) {
-    return [{
-      ...show, ratingKey: `${show.ratingKey}-season-1`, title: 'Season 1', kind: 'season',
-      parentRatingKey: show.ratingKey, seasonNumber: 1, childCount: 3,
-      isWatched: false, viewedCount: show.viewedCount,
-    }];
+    return [1, 2, 3].map((number) => ({
+      ...show, ratingKey: `${show.ratingKey}-season-${number}`, title: `Season ${number}`, kind: 'season',
+      parentRatingKey: show.ratingKey, seasonNumber: number, childCount: 3,
+      isWatched: false, viewedCount: number === 1 ? show.viewedCount : 0,
+    }));
   }
   const match = String(ratingKey).match(/^(demo-\d+)-season-(\d+)$/);
   if (!match) return [];
   const parent = catalog.shows.find((item) => item.ratingKey === match[1]);
   if (!parent) return [];
   return [1, 2, 3].map((number) => {
-    const inProgress = parent.ratingKey === 'demo-6' && number === 2;
-    const watched = parent.ratingKey === 'demo-6' && number === 1;
+    const seasonNumber = Number(match[2]);
+    const inProgress = parent.ratingKey === 'demo-6' && seasonNumber === 1 && number === 2;
+    const watched = parent.ratingKey === 'demo-6' && seasonNumber === 1 && number === 1;
     const progress = inProgress ? .42 : 0;
     return {
       ...parent,
       ratingKey: `${ratingKey}-episode-${number}`,
       title: `Episode ${number}`,
-      secondaryTitle: `${parent.title}  •  S1 E${number}`,
+      secondaryTitle: `${parent.title}  •  S${seasonNumber} E${number}`,
       kind: 'episode',
       parentRatingKey: ratingKey,
       grandparentRatingKey: parent.ratingKey,
-      seasonNumber: Number(match[2]),
+      seasonNumber,
       episodeNumber: number,
       durationMs: 2700000,
       viewOffsetMs: 2700000 * progress,
