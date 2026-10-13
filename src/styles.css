@@ -20,11 +20,12 @@ html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background:
 body { font-family: Inter, "Segoe UI Variable Display", "Segoe UI", Arial, sans-serif; user-select: none; }
 button, input, select { font: inherit; }
 button, [tabindex], input, select { outline: none; }
-button:focus-visible, [tabindex]:focus-visible, input:focus-visible, select:focus-visible {
-  outline: 2px solid var(--cyan);
-  outline-offset: 2px;
-  box-shadow: 0 0 0 5px rgba(22,216,228,.13), 0 14px 36px rgba(0,0,0,.34);
+button:focus-visible, [tabindex]:focus-visible, select:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
+input:focus-visible { outline: none; box-shadow: none; }
+body.pointer-navigation button:focus-visible, body.pointer-navigation [tabindex]:focus-visible, body.pointer-navigation input:focus-visible, body.pointer-navigation select:focus-visible { outline: none; box-shadow: none; }
 button { border: 0; cursor: pointer; }
 .window-titlebar { position: fixed; z-index: 3000; top: 0; left: 0; right: 0; height: 36px; border-bottom: 1px solid rgba(22,216,228,.09); background: linear-gradient(90deg, #0b121b, #0a1017 58%, #0d151e); box-shadow: 0 1px 0 rgba(255,255,255,.018); }
 .window-drag { position: absolute; z-index: 0; inset: 0 138px 0 0; -webkit-app-region: drag; }
@@ -88,6 +89,7 @@ body.fullscreen .content, body.fullscreen .detail-bg { inset-block-start: 0; }
 .plex-server-button small { color: var(--teal); font-size: 12px; text-transform: uppercase; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .primary, .secondary, .danger, .icon-button { min-height: 48px; padding: 0 25px; color: var(--white); border-radius: 9px; background: var(--surface); font-weight: 700; }
+.primary:focus-visible, .secondary:focus-visible, .danger:focus-visible, .icon-button:focus-visible { box-shadow: inset 0 0 0 2px var(--cyan), 0 10px 28px rgba(22,216,228,.12); }
 .primary { color: var(--black); background: var(--cyan); }
 .primary:hover { background: #3de4ec; }
 .secondary:hover, .icon-button:hover { background: var(--raised); }
@@ -288,7 +290,8 @@ body.fullscreen .content, body.fullscreen .detail-bg { inset-block-start: 0; }
 .cinematic-subnav { display: flex; gap: 34px; margin-bottom: 48px; }
 .cinematic-subnav button { position: relative; min-height: 38px; padding: 0; color: #718195; background: transparent; font-size: 17px; font-weight: 780; letter-spacing: .055em; text-transform: uppercase; }
 .cinematic-subnav button.active { color: var(--white); }
-.cinematic-subnav button.active::after { content: ""; position: absolute; right: 0; bottom: 0; left: 0; height: 3px; border-radius: 3px; background: var(--cyan); box-shadow: 0 0 14px rgba(22,216,228,.45); }
+.cinematic-subnav button:hover, .cinematic-subnav button:focus-visible { color: var(--white); }
+.cinematic-subnav button.active::after, .cinematic-subnav button:focus-visible::after { content: ""; position: absolute; right: 0; bottom: 0; left: 0; height: 3px; border-radius: 3px; background: var(--cyan); box-shadow: 0 0 14px rgba(22,216,228,.45); }
 .cinematic-hero-copy { width: min(720px, 56vw); }
 .cinematic-kicker { display: block; margin-bottom: 10px; color: var(--cyan); font-size: 11px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; }
 .cinematic-hero h1, .cinematic-detail-copy h1 { margin: 0; color: #f9fbfd; font-size: clamp(48px, 5vw, 84px); font-weight: 460; line-height: .98; letter-spacing: .13em; text-transform: uppercase; text-shadow: 0 4px 30px rgba(0,0,0,.5); }
@@ -299,7 +302,7 @@ body.fullscreen .content, body.fullscreen .detail-bg { inset-block-start: 0; }
 .cinematic-actions .primary { box-shadow: 0 10px 28px rgba(22,216,228,.2); }
 .cinematic-actions .secondary { border: 1px solid rgba(151,177,194,.46); background: rgba(8,18,26,.58); backdrop-filter: blur(12px); }
 .cinematic-rows { position: relative; z-index: 4; display: flex; flex-direction: column; gap: 26px; margin-top: -56px; padding: 0 0 76px; background: linear-gradient(transparent, #050a0f 104px); }
-.cinematic-home-page .cinematic-rows { margin-top: -12px; }
+.cinematic-library-page .cinematic-rows { margin-top: -12px; }
 .cinematic-section { margin-top: 24px; }
 .cinematic-rows > .cinematic-section { margin-top: 0; }
 .cinematic-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 0 var(--cinema-gutter) 10px; }
@@ -335,7 +338,22 @@ body.fullscreen .content, body.fullscreen .detail-bg { inset-block-start: 0; }
 .cinematic-poster-section { margin-top: 12px; }
 .cinematic-poster-section .rail { align-items: flex-start; gap: 18px; padding-bottom: 14px; }
 .cinematic-rows > .cinematic-poster-section { margin-top: 0; }
-.cinematic-rows > .cinematic-poster-section .rail { padding-bottom: 0; }
+.cinematic-rows > .cinematic-poster-section .rail { height: calc(clamp(150px, 12.2vw, 196px) * 1.5 + 56px); padding-bottom: 0; }
+.cinematic-rows > .cinematic-poster-section .cinematic-poster-card { height: calc(clamp(150px, 12.2vw, 196px) * 1.5 + 50px); }
+.cinematic-rows > .cinematic-poster-section .cinematic-poster-copy { height: 50px; flex: 0 0 50px; overflow: hidden; }
+
+body.pointer-navigation .media-card:focus-visible,
+body.pointer-navigation .cinematic-card.media-card:focus-visible,
+body.pointer-navigation .cinematic-poster-card.media-card:focus-visible,
+body.pointer-navigation .cinematic-collection-card:focus-visible,
+body.pointer-navigation .credit-card:focus-visible { border-color: rgba(146,174,193,.22); transform: none; box-shadow: none; }
+body.pointer-navigation .primary:focus-visible,
+body.pointer-navigation .secondary:focus-visible,
+body.pointer-navigation .danger:focus-visible,
+body.pointer-navigation .icon-button:focus-visible { box-shadow: none; }
+body.pointer-navigation .cinematic-poster-card:focus-visible .cinematic-poster-art,
+body.pointer-navigation .cinematic-collection-card:focus-visible .cinematic-collection-art { border: 1px solid rgba(146,174,193,.22); box-shadow: 0 16px 34px rgba(0,0,0,.2); }
+body.pointer-navigation .credit-card:focus-visible .credit-avatar { border: 1px solid var(--raised); box-shadow: none; }
 
 .cinematic-detail-page .cinematic-hero-bg { height: min(720px, 78vh); }
 .cinematic-detail-page .cinematic-detail-scroll { padding-bottom: 70px; }

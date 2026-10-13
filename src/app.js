@@ -1691,7 +1691,12 @@ function focusSpatial(direction) {
   ranked[0].node.focus(); ranked[0].node.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'auto' }); return true;
 }
 
+document.addEventListener('pointerdown', () => document.body.classList.add('pointer-navigation'), true);
+
 document.addEventListener('keydown', (event) => {
+  if (event.key === 'Tab' || event.key === 'Enter' || event.key === ' ' || event.key.startsWith('Arrow')) {
+    document.body.classList.remove('pointer-navigation');
+  }
   const updateDialog = document.getElementById('update-dialog');
   if (updateDialog && !updateDialog.hidden) {
     const controls = [...updateDialog.querySelectorAll('button:not([hidden]):not([disabled])')];
@@ -1819,6 +1824,10 @@ window.__runMinovaQa = async function runMinovaQa() {
   check('Movies render a full-bleed artwork layer', Boolean(document.querySelector('.cinematic-hero-bg img, .cinematic-hero-fallback')), document.querySelector('.cinematic-hero-bg')?.className || 'missing');
   const cinemaTitles = [...document.querySelectorAll('.cinematic-rows .section-title')].map((title) => title.textContent);
   check('Movies expose Continue Watching and Recently Added rows', cinemaTitles.includes('Continue Watching') && cinemaTitles.includes('Recently Added'), cinemaTitles.join(', '));
+  const movieActions = document.querySelector('.cinematic-library-page[data-cinematic-kind="movies"] .cinematic-hero .actions');
+  const movieFirstHeading = document.querySelector('.cinematic-library-page[data-cinematic-kind="movies"] .cinematic-rows .cinematic-section-heading-copy');
+  const movieHeroShelfGap = (movieFirstHeading?.getBoundingClientRect().top || 0) - (movieActions?.getBoundingClientRect().bottom || 0);
+  check('Movies leave breathing room between Play and the first shelf', Boolean(movieActions && movieFirstHeading) && movieHeroShelfGap >= 24 && movieHeroShelfGap <= 90, movieHeroShelfGap);
   const firstCinemaCard = document.querySelector('.cinematic-rows .cinematic-card');
   const cinemaRect = firstCinemaCard?.getBoundingClientRect();
   check('Cinematic library cards use a wide artwork ratio', Boolean(cinemaRect) && Math.abs(cinemaRect.width / cinemaRect.height - (16 / 9)) < .08, cinemaRect?.toJSON?.() || 'missing');
@@ -1970,6 +1979,8 @@ window.__runMinovaQa = async function runMinovaQa() {
   check('Search opens with the text field ready', document.activeElement?.id === 'search-input', activeLabel());
   check('Search matches titles only, not unrelated summaries or genres', titleMatchesSearch({ title: 'Alice in Wonderland', summary: '' }, 'alice') && !titleMatchesSearch({ title: 'A Nightmare on Elm Street', summary: 'Alice has a nightmare', genres: ['Alice'] }, 'alice'), 'Alice in Wonderland / A Nightmare on Elm Street');
   const search = document.getElementById('search-input');
+  search.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); search.focus(); await wait(40);
+  check('Mouse clicks do not leave a square focus outline', document.body.classList.contains('pointer-navigation') && getComputedStyle(search).outlineStyle === 'none' && getComputedStyle(search).boxShadow === 'none', `${document.body.className}:${getComputedStyle(search).outlineStyle}:${getComputedStyle(search).boxShadow}`);
   search.value = 'horizon'; search.dispatchEvent(new Event('input', { bubbles: true })); await wait(100);
   check('Search results use portrait title cards', Boolean(document.querySelector('#search-results .cinematic-poster-card')), document.querySelector('#search-results .cinematic-card')?.className || 'missing');
   await press('ArrowDown');
@@ -1996,6 +2007,10 @@ window.__runMinovaQa = async function runMinovaQa() {
   check('Back returns from a collection', state.route.type === 'browse' && state.tab === 'collections', `${state.route.type}:${state.tab}`);
 
   document.querySelector('[data-tab="series"]').click(); await wait(140);
+  const seriesLibraryActions = document.querySelector('.cinematic-library-page[data-cinematic-kind="series"] .cinematic-hero .actions');
+  const seriesFirstHeading = document.querySelector('.cinematic-library-page[data-cinematic-kind="series"] .cinematic-rows .cinematic-section-heading-copy');
+  const seriesHeroShelfGap = (seriesFirstHeading?.getBoundingClientRect().top || 0) - (seriesLibraryActions?.getBoundingClientRect().bottom || 0);
+  check('TV Shows leave breathing room between More Info and Continue Watching', Boolean(seriesLibraryActions && seriesFirstHeading) && seriesHeroShelfGap >= 24 && seriesHeroShelfGap <= 90, seriesHeroShelfGap);
   const seriesContinueCards = [...document.querySelectorAll('.cinematic-rows .cinematic-section:first-child .media-card')];
   check('TV Continue Watching contains only actual in-progress episodes', seriesContinueCards.length > 0 && seriesContinueCards.every((cardNode) => cardNode.classList.contains('cinematic-episode-card') && findItem(cardNode.dataset.key)?.kind === 'episode'), seriesContinueCards.map((cardNode) => `${cardNode.dataset.key}:${findItem(cardNode.dataset.key)?.kind}`).join(','));
   check('TV library does not claim Plex titles are Minova originals', document.querySelector('.cinematic-hero .cinematic-kicker')?.textContent === 'From your TV library', document.querySelector('.cinematic-hero .cinematic-kicker')?.textContent || 'missing');
