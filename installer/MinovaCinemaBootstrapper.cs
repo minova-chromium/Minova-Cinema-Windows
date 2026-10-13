@@ -414,7 +414,7 @@ namespace Minova.Cinema.Bootstrapper
             bar.MouseLeftButtonDown += delegate { if (Mouse.LeftButton == MouseButtonState.Pressed) DragMove(); };
             StackPanel identity = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(18, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
             Border dot = new Border { Width = 24, Height = 24, CornerRadius = new CornerRadius(7), Background = new SolidColorBrush(Color.FromRgb(11, 35, 52)) };
-            Image titleLogo = LoadLogo();
+            Image titleLogo = LoadBrandImage("minova.cinema.symbol");
             titleLogo.Width = 22; titleLogo.Height = 22;
             dot.Child = titleLogo;
             identity.Children.Add(dot);
@@ -453,14 +453,11 @@ namespace Minova.Cinema.Bootstrapper
             panel.Children.Add(art);
 
             StackPanel copy = new StackPanel { Margin = new Thickness(38, 56, 36, 36) };
-            Image logo = LoadLogo();
-            logo.Width = 74; logo.Height = 74; logo.HorizontalAlignment = HorizontalAlignment.Left;
+            Image logo = LoadBrandImage("minova.cinema.logo");
+            logo.Width = 230; logo.Height = 90; logo.HorizontalAlignment = HorizontalAlignment.Left;
             copy.Children.Add(logo);
-            TextBlock brand = Text("MINOVA\nCINEMA", 32, White, FontWeights.Bold);
-            brand.LineHeight = 32; brand.Margin = new Thickness(0, 20, 0, 0);
-            copy.Children.Add(brand);
             TextBlock strap = Text("Your library.\nYour screen.\nBeautifully yours.", 17, Muted, FontWeights.Normal);
-            strap.LineHeight = 26; strap.Margin = new Thickness(0, 20, 0, 0);
+            strap.LineHeight = 26; strap.Margin = new Thickness(0, 24, 0, 0);
             copy.Children.Add(strap);
             Border badge = new Border { Background = new SolidColorBrush(Color.FromArgb(28, 22, 216, 228)), BorderBrush = new SolidColorBrush(Color.FromArgb(100, 22, 216, 228)), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(14), Padding = new Thickness(13, 8, 13, 8), Margin = new Thickness(0, 46, 0, 0), HorizontalAlignment = HorizontalAlignment.Left };
             badge.Child = Text(options.Mode == InstallMode.Update ? "●  UPDATE DETECTED" : "●  READY FOR WINDOWS", 10, Cyan, FontWeights.Bold);
@@ -713,10 +710,10 @@ namespace Minova.Cinema.Bootstrapper
             progressFill.Width = Math.Max(8, progressTrack.ActualWidth * currentProgress / 100.0);
         }
 
-        private static Image LoadLogo()
+        private static Image LoadBrandImage(string resourceName)
         {
             Image result = new Image { Stretch = Stretch.Uniform };
-            using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("minova.cinema.logo"))
+            using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName))
             {
                 if (stream == null) return result;
                 BitmapImage bitmap = new BitmapImage();

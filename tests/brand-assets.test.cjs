@@ -38,11 +38,14 @@ test('Windows icon contains the generated multi-size Minova symbol', () => {
   assert.ok(icon.length > 10_000);
 });
 
-test('custom installer embeds the real Minova PNG instead of converting the ICO', () => {
+test('custom installer embeds the complete Minova Cinema logo and separate title-bar symbol', () => {
   const builder = fs.readFileSync(path.join(root, 'scripts', 'Build-CustomInstaller.ps1'), 'utf8');
   const bootstrapper = fs.readFileSync(path.join(root, 'installer', 'MinovaCinemaBootstrapper.cs'), 'utf8');
 
+  assert.match(builder, /assets\\minova-cinema-wordmark\.png/);
   assert.match(builder, /assets\\minova-symbol-color\.png/);
   assert.doesNotMatch(builder, /ToBitmap\(\)/);
-  assert.match(bootstrapper, /Image titleLogo = LoadLogo\(\)/);
+  assert.match(bootstrapper, /LoadBrandImage\("minova\.cinema\.logo"\)/);
+  assert.match(bootstrapper, /LoadBrandImage\("minova\.cinema\.symbol"\)/);
+  assert.doesNotMatch(bootstrapper, /Text\("MINOVA\\nCINEMA"/);
 });
