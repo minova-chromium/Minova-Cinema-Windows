@@ -7,6 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const ENHANCEMENT_MODES = ['off', 'balanced', 'high', 'ultra'];
+const PROGRESS_UPDATE_INTERVAL_MS = 200;
 
 function resourcePath(...segments) {
   const root = process.resourcesPath && fs.existsSync(path.join(process.resourcesPath, 'vendor'))
@@ -59,6 +60,8 @@ class NativeMpvPlayer extends EventEmitter {
     this.closed = false;
     this.handoffCommitted = false;
     this.timelineTimer = null;
+    this.stateEmitTimer = null;
+    this.lastStateEmitAt = 0;
     this.resumeApplied = false;
     this.state = {
       ready: false,
@@ -221,7 +224,7 @@ class NativeMpvPlayer extends EventEmitter {
     else if (message.event === 'end-file') this.endFile(message).catch((error) => this.fail(error.message));
   }
 
-  propertyChanged(name, value) {
+  propertyChanged(name, value, { emit = true } = {}) {
     if (name === 'time-pos') this.state.position = Number(value) || 0;
     else if (name === 'duration') this.state.duration = Number(value) || this.state.duration;
     else if (name === 'pause') this.state.paused = Boolean(value);
@@ -238,7 +241,9 @@ class NativeMpvPlayer extends EventEmitter {
       this.state.sourceHeight = Number(value.h || value.dh) || this.state.sourceHeight;
       this.refreshEnhancementLabel();
     }
-    this.emitState();
+    if (!emit) return;
+    if (name === 'time-pos') this.scheduleStateEmit(PROGRESS_UPDATE_INTERVAL_MS);
+    else this.scheduleStateEmit();
   }
 
   async fileLoaded() {
@@ -289,9 +294,14 @@ class NativeMpvPlayer extends EventEmitter {
 
   async refreshProperties() {
     const names = ['time-pos', 'duration', 'pause', 'volume', 'mute', 'aid', 'sid', 'track-list', 'video-params', 'vo-configured', 'current-vo', 'hwdec-current'];
-    for (const name of names) {
-      try { this.propertyChanged(name, await this.command(['get_property', name])); } catch {}
+    const values = await Promise.all(names.map(async (name) => {
+      try { return [name, await this.command(['get_property', name])]; }
+      catch { return null; }
+    }));
+    for (const entry of values) {
+      if (entry) this.propertyChanged(entry[0], entry[1], { emit: false });
     }
+    this.emitState();
   }
 
   command(command) {
@@ -311,16 +321,45 @@ class NativeMpvPlayer extends EventEmitter {
   }
 
   async execute(action, value) {
-    if (action === 'toggle-pause') await this.command(['cycle', 'pause']);
-    else if (action === 'seek-relative') await this.command(['seek', Number(value) || 0, 'relative+exact']);
-    else if (action === 'seek-absolute') await this.command(['seek', Math.max(0, Number(value) || 0), 'absolute+exact']);
-    else if (action === 'volume') await this.command(['set_property', 'volume', Math.max(0, Math.min(100, Number(value) || 0))]);
-    else if (action === 'mute') await this.command(['cycle', 'mute']);
-    else if (action === 'audio') await this.command(['set_property', 'aid', value]);
-    else if (action === 'subtitle') await this.command(['set_property', 'sid', value == null || value === 'no' ? 'no' : value]);
+    if (action === 'toggle-pause') {
+      this.state.paused = !this.state.paused;
+      this.emitState();
+      await this.command(['cycle', 'pause']);
+    }
+    else if (action === 'seek-relative') {
+      const offset = Number(value) || 0;
+      this.state.position = Math.max(0, Math.min(this.state.duration || Number.POSITIVE_INFINITY, this.state.position + offset));
+      this.emitState();
+      await this.command(['seek', offset, 'relative+keyframes']);
+    }
+    else if (action === 'seek-absolute') {
+      const position = Math.max(0, Number(value) || 0);
+      this.state.position = Math.min(this.state.duration || Number.POSITIVE_INFINITY, position);
+      this.emitState();
+      await this.command(['seek', position, 'absolute+exact']);
+    }
+    else if (action === 'volume') {
+      this.state.volume = Math.max(0, Math.min(100, Number(value) || 0));
+      this.emitState();
+      await this.command(['set_property', 'volume', this.state.volume]);
+    }
+    else if (action === 'mute') {
+      this.state.muted = !this.state.muted;
+      this.emitState();
+      await this.command(['cycle', 'mute']);
+    }
+    else if (action === 'audio') {
+      this.state.audioId = value;
+      this.emitState();
+      await this.command(['set_property', 'aid', value]);
+    }
+    else if (action === 'subtitle') {
+      this.state.subtitleId = value == null || value === 'no' ? null : value;
+      this.emitState();
+      await this.command(['set_property', 'sid', this.state.subtitleId == null ? 'no' : this.state.subtitleId]);
+    }
     else if (action === 'enhancement') await this.applyEnhancement(String(value));
     else if (action === 'resync') await this.command(['seek', 0, 'relative+exact']);
-    await this.refreshProperties();
     return this.snapshot();
   }
 
@@ -362,17 +401,35 @@ class NativeMpvPlayer extends EventEmitter {
 
   async handoff() {
     await this.command(['set_property', 'pause', true]);
-    await this.refreshProperties();
+    this.state.paused = true;
+    try {
+      this.propertyChanged('time-pos', await this.command(['get_property', 'time-pos']), { emit: false });
+    } catch {}
+    this.emitState();
     await this.reportTimeline('paused');
     this.handoffCommitted = true;
     return this.snapshot();
   }
 
   snapshot() {
-    return JSON.parse(JSON.stringify(this.state));
+    return { ...this.state, tracks: this.state.tracks.map((track) => ({ ...track })) };
+  }
+
+  scheduleStateEmit(minimumIntervalMs = 0) {
+    if (this.stateEmitTimer || this.closed) return;
+    const elapsed = Date.now() - this.lastStateEmitAt;
+    const delay = Math.max(0, minimumIntervalMs - elapsed);
+    this.stateEmitTimer = setTimeout(() => {
+      this.stateEmitTimer = null;
+      this.emitState();
+    }, delay);
+    this.stateEmitTimer.unref?.();
   }
 
   emitState() {
+    if (this.stateEmitTimer) clearTimeout(this.stateEmitTimer);
+    this.stateEmitTimer = null;
+    this.lastStateEmitAt = Date.now();
     this.emit('state', this.snapshot());
   }
 
@@ -387,6 +444,7 @@ class NativeMpvPlayer extends EventEmitter {
     if (this.closed) return;
     this.closed = true;
     clearInterval(this.timelineTimer);
+    clearTimeout(this.stateEmitTimer);
     const bridge = this.windowBridge;
     if (bridge?.stdin && !bridge.stdin.destroyed && !bridge.stdin.writableEnded) {
       try { bridge.stdin.end('hide\nquit\n', () => {}); } catch {}

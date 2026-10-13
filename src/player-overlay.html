@@ -11,8 +11,10 @@
   <main id="player-overlay" class="controls-visible loading">
     <button id="surface" aria-label="Play or pause"></button>
     <header class="player-chrome player-header">
-      <button class="icon-button" data-action="back" aria-label="Close player">←</button>
-      <div class="title-block"><strong id="title">Minova Cinema</strong><span id="transport">Direct Play</span></div>
+      <button class="icon-button header-back" data-action="back" aria-label="Close player" title="Back">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 5 7.5 12l7 7"/></svg>
+      </button>
+      <div class="title-block"><span id="transport">NOW PLAYING · DIRECT PLAY</span><strong id="title">Minova Cinema</strong></div>
       <div class="status-badges"><span id="quality-badge">DIRECT PLAY</span><span id="enhancement-badge">GPU Balanced</span></div>
       <div class="playback-window-controls" aria-label="Playback window controls">
         <button type="button" data-action="window-minimize" aria-label="Minimize playback window"><span class="minimize-glyph"></span></button>
@@ -25,25 +27,42 @@
     <section id="track-menu" class="track-menu" hidden></section>
 
     <footer class="player-chrome player-controls">
-      <input id="seek" class="seek" type="range" min="0" max="1" value="0" step="0.1" aria-label="Playback position">
-      <div class="control-row">
-        <button class="small-button" data-action="rewind" aria-label="Rewind ten seconds">↶ 10</button>
-        <button class="play-button" data-action="play" aria-label="Pause">❚❚</button>
-        <button class="small-button" data-action="forward" aria-label="Forward ten seconds">10 ↷</button>
+      <div class="timeline-row">
+        <input id="seek" class="seek" type="range" min="0" max="1" value="0" step="0.1" aria-label="Playback position">
         <span id="time">0:00 / 0:00</span>
+      </div>
+      <div class="control-row">
+        <div class="transport-controls">
+          <button class="icon-button seek-button" data-action="rewind" aria-label="Rewind ten seconds" title="Rewind 10 seconds">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v6h6"/><text x="12" y="15">10</text></svg>
+          </button>
+          <button class="play-button" data-action="play" aria-label="Pause" title="Play or pause">
+            <svg class="pause-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zm6 0h4v14h-4z"/></svg>
+            <svg class="play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z"/></svg>
+          </button>
+          <button class="icon-button seek-button" data-action="forward" aria-label="Forward ten seconds" title="Forward 10 seconds">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7M21 4v6h-6"/><text x="12" y="15">10</text></svg>
+          </button>
+        </div>
         <span class="spacer"></span>
-        <button class="icon-button" data-action="mute" aria-label="Mute">🔊</button>
-        <input id="volume" class="volume" type="range" min="0" max="100" value="100" step="1" aria-label="Volume">
-        <button class="menu-button" data-action="audio">Audio</button>
-        <button class="menu-button" data-action="subtitles">Subtitles: Off</button>
-        <button class="menu-button accent-outline" data-action="handoff" title="Save this position to Plex and close the player">Continue elsewhere</button>
-        <button class="menu-button" data-action="resync">Resync</button>
-        <button class="menu-button accent-outline" data-action="enhancement">GPU Balanced</button>
+        <div class="sound-controls">
+          <button class="icon-button volume-button" data-action="mute" aria-label="Mute" title="Mute">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path class="speaker" d="M4 9v6h4l5 4V5L8 9z"/><path class="sound-low" d="M16 9.5a4 4 0 0 1 0 5"/><path class="sound-high" d="M18.5 7a7.5 7.5 0 0 1 0 10"/><path class="sound-muted" d="m16 9 5 6m0-6-5 6"/></svg>
+          </button>
+          <input id="volume" class="volume" type="range" min="0" max="100" value="100" step="1" aria-label="Volume">
+        </div>
+        <div class="utility-controls">
+          <button class="menu-button" data-action="audio" title="Audio tracks"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 14v-4a7 7 0 0 1 14 0v4M5 14H3v5h4v-5zm14 0h2v5h-4v-5z"/></svg><span id="audio-label">Audio</span></button>
+          <button class="menu-button" data-action="subtitles" title="Subtitle tracks"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 11h4m-4 3h6m2-3h2m-2 3h2"/></svg><span id="subtitle-label">Subtitles off</span></button>
+          <button class="icon-button" data-action="handoff" aria-label="Continue elsewhere" title="Save this position to Plex and close the player"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h11m-4-4 4 4-4 4M18 5h2v14h-2"/></svg><span id="handoff-label" class="sr-only">Continue elsewhere</span></button>
+          <button class="icon-button" data-action="resync" aria-label="Resynchronize audio and video" title="Resync audio and video"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6.5 9a6 6 0 0 1 10.7-2L20 12m-16 0 2.8 5a6 6 0 0 0 10.7-2"/></svg></button>
+          <button class="menu-button enhancement-button" data-action="enhancement" title="Picture enhancement"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5zM18.5 15l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></svg><span id="enhancement-label">Balanced</span></button>
+        </div>
         <button class="icon-button pin-button" data-action="pin" aria-label="Unpin mini-player" aria-pressed="true" title="Unpin mini-player">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 9V4l1-1V2H7v1l1 1v5c0 1.66-1.34 3-3 3v2h5.97v7l1.03 1 1.03-1v-7H19v-2c-1.66 0-3-1.34-3-3Z"/></svg>
         </button>
-        <button class="icon-button accent-outline" data-action="mini-player" aria-label="Pop out mini-player" title="Pop out mini-player">▣</button>
-        <button class="icon-button accent-outline" data-action="fullscreen" aria-label="Fullscreen">⛶</button>
+        <button class="icon-button" data-action="mini-player" aria-label="Pop out mini-player" title="Pop out mini-player"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><rect x="12" y="11" width="7" height="6" rx="1"/></svg></button>
+        <button class="icon-button" data-action="fullscreen" aria-label="Fullscreen" title="Fullscreen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M8 21H3v-5m13 5h5v-5"/></svg></button>
       </div>
     </footer>
     <div class="window-resize-handle resize-n" data-resize-edge="n"></div>

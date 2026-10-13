@@ -9,6 +9,10 @@ const trackMenu = document.getElementById('track-menu');
 const seek = document.getElementById('seek');
 const volume = document.getElementById('volume');
 const time = document.getElementById('time');
+const audioLabel = document.getElementById('audio-label');
+const subtitleLabel = document.getElementById('subtitle-label');
+const enhancementLabel = document.getElementById('enhancement-label');
+const handoffLabel = document.getElementById('handoff-label');
 let state = { paused: false, position: 0, duration: 0, volume: 100, muted: false, tracks: [], enhancement: 'balanced' };
 let hideTimer;
 let seeking = false;
@@ -20,6 +24,7 @@ let resizeSession = null;
 let resizeFrame = null;
 let moveSession = null;
 let moveFrame = null;
+let volumeTimer = null;
 
 function clock(value) {
   const seconds = Math.max(0, Math.floor(Number(value) || 0));
@@ -40,7 +45,7 @@ function renderWindowMode(mode = {}) {
   document.body.classList.toggle('maximized', maximized);
   document.body.classList.toggle('fullscreen', fullScreen);
   const control = button('mini-player');
-  control.textContent = miniPlayer ? '▢' : '▣';
+  control.classList.toggle('active', miniPlayer);
   control.setAttribute('aria-label', miniPlayer ? 'Restore full player' : 'Pop out mini-player');
   control.title = miniPlayer ? 'Restore full player' : 'Pop out mini-player';
   const pin = button('pin');
@@ -90,13 +95,15 @@ function focusDirectional(key) {
 function render(next) {
   state = { ...state, ...next };
   title.textContent = state.title || 'Minova Cinema';
-  transport.textContent = state.directPlay === false ? 'Plex optimized playback' : 'Direct Play';
+  transport.textContent = state.directPlay === false ? 'NOW PLAYING · PLEX OPTIMIZED' : 'NOW PLAYING · DIRECT PLAY';
   qualityBadge.textContent = state.directPlay === false ? 'PLEX TRANSCODE' : 'DIRECT PLAY';
   enhancementBadge.textContent = state.enhancementLabel || 'GPU Balanced';
-  button('enhancement').textContent = ({ off: 'Upscale Off', balanced: 'GPU Balanced', high: 'ArtCNN High', ultra: 'ArtCNN Ultra' })[state.enhancement] || 'GPU Balanced';
-  button('play').textContent = state.paused ? '▶' : '❚❚';
+  enhancementLabel.textContent = ({ off: 'Off', balanced: 'Balanced', high: 'ArtCNN High', ultra: 'ArtCNN Ultra' })[state.enhancement] || 'Balanced';
+  button('play').classList.toggle('is-paused', Boolean(state.paused));
   button('play').setAttribute('aria-label', state.paused ? 'Play' : 'Pause');
-  button('mute').textContent = state.muted || state.volume <= 0 ? '🔇' : state.volume < 50 ? '🔉' : '🔊';
+  const volumeLevel = state.muted || state.volume <= 0 ? 'muted' : state.volume < 50 ? 'low' : 'high';
+  button('mute').dataset.volumeLevel = volumeLevel;
+  button('mute').setAttribute('aria-label', volumeLevel === 'muted' ? 'Unmute' : 'Mute');
   if (!seeking) {
     seek.max = Math.max(1, Number(state.duration) || 1);
     seek.value = Math.min(Number(state.position) || 0, Number(seek.max));
@@ -105,8 +112,8 @@ function render(next) {
   time.textContent = `${clock(state.position)} / ${clock(state.duration)}`;
   const audio = (state.tracks || []).find((track) => track.type === 'audio' && String(track.id) === String(state.audioId));
   const subtitle = (state.tracks || []).find((track) => track.type === 'sub' && String(track.id) === String(state.subtitleId));
-  button('audio').textContent = audio ? `Audio: ${audio.title}` : 'Audio';
-  button('subtitles').textContent = subtitle ? `Subtitles: ${subtitle.title}` : 'Subtitles: Off';
+  audioLabel.textContent = audio?.title || 'Audio';
+  subtitleLabel.textContent = subtitle?.title || 'Subtitles off';
   root.classList.toggle('loading', Boolean(state.loading));
   root.classList.toggle('error', Boolean(state.error));
   message.querySelector('strong').textContent = state.error || 'Preparing playback…';
@@ -122,7 +129,7 @@ async function handoff() {
   const control = button('handoff');
   if (control.disabled) return;
   control.disabled = true;
-  control.textContent = 'Saving…';
+  handoffLabel.textContent = 'Saving position';
   notice.textContent = 'Saving your exact position to Plex…';
   notice.hidden = false;
   showControls(true);
@@ -130,7 +137,7 @@ async function handoff() {
     await window.nativePlayer.handoff();
   } catch (error) {
     control.disabled = false;
-    control.textContent = 'Continue elsewhere';
+    handoffLabel.textContent = 'Continue elsewhere';
     notice.textContent = `Could not save your position: ${error.message || String(error)}`;
     notice.hidden = false;
   }
@@ -202,7 +209,19 @@ seek.addEventListener('input', () => { time.textContent = `${clock(seek.value)} 
 seek.addEventListener('change', () => { seeking = false; command('seek-absolute', Number(seek.value)); });
 volume.addEventListener('click', (event) => event.stopPropagation());
 volume.addEventListener('pointerdown', (event) => { event.stopPropagation(); showControls(true); });
-volume.addEventListener('input', (event) => { event.stopPropagation(); command('volume', Number(volume.value)); });
+volume.addEventListener('input', (event) => {
+  event.stopPropagation();
+  const value = Number(volume.value);
+  state.volume = value;
+  button('mute').dataset.volumeLevel = state.muted || value <= 0 ? 'muted' : value < 50 ? 'low' : 'high';
+  clearTimeout(volumeTimer);
+  volumeTimer = setTimeout(() => command('volume', value), 70);
+});
+volume.addEventListener('change', (event) => {
+  event.stopPropagation();
+  clearTimeout(volumeTimer);
+  command('volume', Number(volume.value));
+});
 
 for (const resizeHandle of document.querySelectorAll('.window-resize-handle')) {
   resizeHandle.addEventListener('pointerdown', async (event) => {

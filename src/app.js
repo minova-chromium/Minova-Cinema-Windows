@@ -738,9 +738,9 @@ function jumpToLetter(letter) {
     showToast(`No ${state.tab === 'series' ? 'series' : 'movies'} beginning with ${normalized}.`);
     return false;
   }
-  target.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  target.scrollIntoView({ block: 'start', behavior: 'auto' });
   const first = target.matches('.media-card') ? target : target.querySelector('.media-card');
-  setTimeout(() => first?.focus({ preventScroll: true }), 180);
+  requestAnimationFrame(() => first?.focus({ preventScroll: true }));
   return true;
 }
 
@@ -759,7 +759,7 @@ function initialFocus() {
 function focusNode(node) {
   if (!node) return false;
   node.focus({ preventScroll: true });
-  node.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+  node.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'auto' });
   return true;
 }
 
@@ -1246,7 +1246,7 @@ function focusSpatial(direction) {
     return { node, score: primary + cross * 2.6 };
   }).filter(Boolean).sort((a, b) => a.score - b.score);
   if (!ranked.length) return false;
-  ranked[0].node.focus(); ranked[0].node.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' }); return true;
+  ranked[0].node.focus(); ranked[0].node.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'auto' }); return true;
 }
 
 document.addEventListener('keydown', (event) => {
