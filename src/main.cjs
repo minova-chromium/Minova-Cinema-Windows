@@ -91,6 +91,9 @@ function setupAutoUpdater() {
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.allowPrerelease = false;
+  // The public update artifact is Minova's custom bootstrapper. It embeds the
+  // NSIS core, so there is no compatible differential blockmap to request.
+  autoUpdater.disableDifferentialDownload = true;
   autoUpdater.on('checking-for-update', () => publishUpdateState({ status: 'checking', progress: 0, message: 'Checking GitHub for updates…' }));
   autoUpdater.on('update-available', (info) => {
     updateAccepted = false;

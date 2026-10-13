@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$InstallerPath,
-    [ValidateSet('Fresh', 'Update', 'Auto')]
+    [ValidateSet('Fresh', 'Update', 'Updater', 'Auto')]
     [string]$Mode = 'Auto'
 )
 
@@ -20,11 +20,13 @@ $effectiveMode = $Mode
 $arguments = @('/test')
 if ($Mode -eq 'Fresh') { $arguments += '/fresh' }
 elseif ($Mode -eq 'Update') { $arguments += '/update' }
+elseif ($Mode -eq 'Updater') { $arguments += @('--updated', '--force-run') }
 else {
     $uninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\5a97384b-a65f-520d-b1b6-0fe6fca644df'
     $fallbackExe = Join-Path $env:LOCALAPPDATA 'Programs\Minova Cinema\Minova Cinema.exe'
     $effectiveMode = if ((Test-Path -LiteralPath $uninstallKey) -or (Test-Path -LiteralPath $fallbackExe)) { 'Update' } else { 'Fresh' }
 }
+$effectiveMode = if ($Mode -eq 'Updater') { 'Update' } else { $effectiveMode }
 $primaryLabel = if ($effectiveMode -eq 'Fresh') { 'Install Minova Cinema' } else { 'Update Minova Cinema' }
 $completeLabel = if ($effectiveMode -eq 'Fresh') { 'Minova Cinema is ready' } else { "You're now up to date" }
 $process = Start-Process -FilePath $installer -ArgumentList $arguments -PassThru

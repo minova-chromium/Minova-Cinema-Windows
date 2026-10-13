@@ -20,7 +20,9 @@
     "dist:core": "electron-builder --win nsis --publish never",
     "installer:custom": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Build-CustomInstaller.ps1",
     "installer:test": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Test-CustomInstaller.ps1",
-    "dist": "pnpm run dist:core && pnpm run installer:custom"
+    "installer:test:updater": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Test-CustomInstaller.ps1 -Mode Updater",
+    "installer:metadata": "node scripts/Prepare-UpdateRelease.cjs",
+    "dist": "pnpm run dist:core && pnpm run installer:custom && pnpm run installer:metadata"
   },
   "dependencies": {
     "electron-updater": "6.6.2"

@@ -74,11 +74,14 @@ namespace Minova.Cinema.Bootstrapper
                     String.Equals(value, "/silent", StringComparison.OrdinalIgnoreCase)) result.Silent = true;
                 else if (String.Equals(value, "/test", StringComparison.OrdinalIgnoreCase)) result.TestMode = true;
                 else if (String.Equals(value, "/fresh", StringComparison.OrdinalIgnoreCase)) result.ForceFresh = true;
-                else if (String.Equals(value, "/update", StringComparison.OrdinalIgnoreCase)) result.ForceUpdate = true;
+                else if (String.Equals(value, "/update", StringComparison.OrdinalIgnoreCase) ||
+                    String.Equals(value, "--updated", StringComparison.OrdinalIgnoreCase)) result.ForceUpdate = true;
                 else if (String.Equals(value, "/noDesktopShortcut", StringComparison.OrdinalIgnoreCase)) result.DesktopShortcut = false;
                 else if (String.Equals(value, "/noStartMenuShortcut", StringComparison.OrdinalIgnoreCase)) result.StartMenuShortcut = false;
                 else if (value.StartsWith("/installDir=", StringComparison.OrdinalIgnoreCase))
                     result.InstallDirectory = value.Substring("/installDir=".Length).Trim('"');
+                else if (value.StartsWith("/D=", StringComparison.OrdinalIgnoreCase))
+                    result.InstallDirectory = value.Substring("/D=".Length).Trim('"');
             }
             return result;
         }
