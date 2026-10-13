@@ -1998,6 +1998,7 @@ window.__runMinovaQa = async function runMinovaQa() {
   check('Resume resolves the in-progress episode using Android logic', seriesPrimary?.dataset?.key === 'demo-6-season-1-episode-2', seriesPrimary?.dataset?.key || 'missing');
   check('Series Cast & Crew includes actor pictures', Boolean(document.querySelector('.cast-section .credit-avatar img')), document.querySelectorAll('.cast-section .credit-avatar img').length);
   check('TV episodes keep landscape playback cards', Boolean(document.querySelector('.cinematic-series-content .cinematic-episode-card.landscape')), document.querySelector('.cinematic-series-content .cinematic-episode-card')?.className || 'missing');
+  check('Episode rail includes compact left and right scroll controls', document.querySelectorAll('.cinematic-series-content .section-controls .rail-arrow').length === 2, document.querySelectorAll('.cinematic-series-content .section-controls .rail-arrow').length);
   const seriesLeftEdges = [
     document.querySelector('.cinematic-series-detail .cinematic-detail-copy h1'),
     document.querySelector('.cinematic-season-tabs'),

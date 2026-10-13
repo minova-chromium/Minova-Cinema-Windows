@@ -368,7 +368,8 @@ body.fullscreen .content, body.fullscreen .detail-bg { inset-block-start: 0; }
 .cinematic-episode-copy h2 { margin: 0; font-size: 25px; font-weight: 620; letter-spacing: .13em; text-transform: uppercase; }
 .cinematic-episode-copy p { margin: 10px 0 0; color: #c4d0d9; font-size: 16px; line-height: 1.45; }
 .cinematic-series-content .cinematic-section { margin-top: 8px; }
-.cinematic-series-content .cinematic-section-heading { display: none; }
+.cinematic-series-content .cinematic-section-heading { display: flex; min-height: 32px; justify-content: flex-end; padding-top: 0; padding-bottom: 4px; }
+.cinematic-series-content .cinematic-section-heading-copy { display: none; }
 .cinematic-episode-card.media-card { flex-basis: clamp(300px, 25vw, 410px); }
 .cinematic-episode-card .cinematic-card-title { letter-spacing: .04em; text-transform: none; }
 .cinematic-utility-ambient { position: fixed; z-index: 0; inset: 0; background: radial-gradient(circle at 78% 8%, rgba(22,216,228,.1), transparent 30%), radial-gradient(circle at 28% 75%, rgba(23,105,255,.09), transparent 34%), linear-gradient(135deg, #09131d, #050a0f 58%); }
