@@ -445,6 +445,23 @@ function alphabeticalGrid(items) {
   }).join('')}</div><aside class="alpha-index" aria-label="Alphabetical jump">${index}</aside></div>`;
 }
 
+function cinematicAlphabeticalLibrary(items) {
+  const filtered = state.genre ? items.filter((item) => item.genres?.includes(state.genre)) : items;
+  const groups = new Map();
+  for (const item of sortAlphabetically(filtered)) {
+    const letter = alphabetLetter(item);
+    if (!groups.has(letter)) groups.set(letter, []);
+    groups.get(letter).push(item);
+  }
+  const letters = [...groups.keys()].sort((left, right) => left === '#' ? 1 : right === '#' ? -1 : left.localeCompare(right));
+  const index = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((letter) => `<button type="button" data-action="alpha-jump" data-letter="${letter}" ${groups.has(letter) ? '' : 'disabled'} aria-label="Jump to ${letter}">${letter}</button>`).join('');
+  if (!letters.length) return `<div class="cinematic-empty"><strong>No titles in this genre</strong><span>Choose another genre to see more of your library.</span></div>`;
+  return `<div class="alphabetical-layout cinematic-alphabetical-layout"><div class="alphabetical-groups cinematic-alphabetical-groups">${letters.map((letter) => {
+    const group = groups.get(letter);
+    return `<section class="alpha-group cinematic-alpha-group" data-alpha-group="${letter}"><div class="alpha-heading cinematic-alpha-heading"><h2>${letter}</h2><span>${group.length} ${group.length === 1 ? 'title' : 'titles'}</span></div><div class="grid cinematic-poster-grid">${group.map((item) => cinematicCard(item, { portrait: true })).join('')}</div></section>`;
+  }).join('')}</div><aside class="alpha-index cinematic-alpha-index" aria-label="Alphabetical jump">${index}</aside></div>`;
+}
+
 function rowsFor(items) {
   const genres = genresFor(items);
   if (state.genre) return shelf(state.genre, sortAlphabetically(items.filter((item) => item.genres?.includes(state.genre))));
@@ -513,7 +530,7 @@ function cinematicCard(item, { episode = false, portrait = false } = {}) {
     const type = item.kind === 'show' ? 'TV Show' : 'Movie';
     const details = [item.year, type].filter(Boolean).join(' · ');
     return `<button class="media-card cinematic-card cinematic-poster-card" data-action="open" data-key="${esc(item.ratingKey)}" data-focus-key="${esc(item.ratingKey)}" aria-label="Open ${esc(item.title)}">
-      <span class="cinematic-poster-art">${imagePath ? `<img src="${art(imagePath)}" alt="">` : '<span class="cinematic-card-fallback" aria-hidden="true"></span>'}${item.isWatched ? '<span class="badge">✓</span>' : ''}${item.progress > 0 && item.progress < .98 ? `<span class="progress"><span style="width:${Math.round(item.progress * 100)}%"></span></span>` : ''}</span>
+      <span class="cinematic-poster-art">${imagePath ? `<img src="${art(imagePath)}" alt="" loading="lazy" decoding="async">` : '<span class="cinematic-card-fallback" aria-hidden="true"></span>'}${item.isWatched ? '<span class="badge">✓</span>' : ''}${item.progress > 0 && item.progress < .98 ? `<span class="progress"><span style="width:${Math.round(item.progress * 100)}%"></span></span>` : ''}</span>
       <span class="cinematic-poster-copy"><strong>${esc(item.title)}</strong><small>${esc(details)}</small></span>
     </button>`;
   }
@@ -560,7 +577,6 @@ function cinematicHomePage() {
       <div class="cinematic-scroll">
         ${cinematicBrandHeader()}
         <section class="cinematic-hero">
-          <div class="cinematic-subnav" aria-label="Cinema navigation"><button data-action="tab" data-tab="home" class="active">Recommended</button><button data-action="tab" data-tab="movies">Movies</button><button data-action="tab" data-tab="series">TV Shows</button></div>
           <div class="cinematic-hero-copy">
             <span class="cinematic-kicker">Recommended for you</span>
             <h1 id="cinematic-hero-title">${esc(selected?.title || 'Your Cinema')}</h1>
@@ -725,7 +741,7 @@ function cinematicLibraryPage(items, kind) {
       <div class="cinematic-scroll">
         ${cinematicBrandHeader()}
         <section class="cinematic-hero">
-          <div class="cinematic-subnav" aria-label="Cinema library"><button data-action="tab" data-tab="movies" class="${isSeries ? '' : 'active'}">Movies</button><button data-action="tab" data-tab="series" class="${isSeries ? 'active' : ''}">TV Shows</button></div>
+          <div class="cinematic-section-nav" aria-label="${isSeries ? 'TV Shows' : 'Movies'} navigation"><button data-action="tab" data-tab="${kind}" class="active" aria-current="page">${isSeries ? 'TV Shows' : 'Movies'}</button><button data-action="open-library" data-kind="${kind}">Library</button></div>
           <div class="cinematic-hero-copy">
             <span class="cinematic-kicker">${isSeries ? 'From your TV library' : 'Featured from your library'}</span>
             <h1 id="cinematic-hero-title">${esc(selected?.title || (isSeries ? 'TV Shows' : 'Movies'))}</h1>
@@ -743,6 +759,21 @@ function cinematicLibraryPage(items, kind) {
       </div>
     </main>
   </div>`;
+}
+
+function cinematicFullLibraryPage(kind) {
+  const isSeries = kind === 'series';
+  const items = isSeries ? state.catalog.shows : state.catalog.movies;
+  const genres = genresFor(items);
+  const filteredCount = state.genre ? items.filter((item) => item.genres?.includes(state.genre)).length : items.length;
+  const title = isSeries ? 'TV Shows' : 'Movies';
+  return cinematicUtilityShell(kind, 'cinematic-full-library-page', `<section class="cinematic-utility-content cinematic-full-library-content">
+    <div class="cinematic-full-library-toolbar">
+      <div class="cinematic-page-heading cinematic-library-page-heading"><span class="cinematic-kicker">Your complete Plex library</span><div class="cinematic-library-title-row"><h1>${title}</h1><span>Library</span></div><p>${filteredCount} ${filteredCount === 1 ? 'title' : 'titles'}${state.genre ? ` in ${esc(state.genre)}` : ''}, arranged from A to Z.</p></div>
+      <label class="genre-filter cinematic-genre-filter"><span>Genre</span><select id="genre-filter" aria-label="Filter ${title} by genre"><option value="">All genres</option>${genres.map((genre) => `<option value="${esc(genre)}" ${state.genre === genre ? 'selected' : ''}>${esc(genre)}</option>`).join('')}</select></label>
+    </div>
+    ${cinematicAlphabeticalLibrary(items)}
+  </section>`, { back: true });
 }
 
 function browsePage() {
@@ -856,7 +887,6 @@ function detailPage(item, children = [], seriesPlayback = null) {
       <div class="cinematic-detail-scroll">
         ${cinematicBrandHeader({ back: true })}
         <section class="detail-copy cinematic-detail-copy">
-          ${isSeries ? '<div class="cinematic-subnav detail-subnav"><button data-action="tab" data-tab="movies">Movies</button><button data-action="tab" data-tab="series" class="active">TV Shows</button></div>' : ''}
           <span class="cinematic-kicker">${esc(isSeries ? 'TV series' : 'Feature presentation')}</span>
           <h1>${esc(item.title)}</h1>
           <p class="cinematic-meta">${esc(metadata(item))}${item.genres?.length ? `  •  ${esc(item.genres.slice(0, 3).join('  •  '))}` : ''}</p>
@@ -942,6 +972,7 @@ function render() {
   if (!state.config.connected && !state.config.demoMode) { appRoot.innerHTML = onboarding(); bindPage(); refreshUpdateDialog(); return; }
   if (state.loading) { appRoot.innerHTML = loading(); refreshUpdateDialog(); return; }
   if (state.route.type === 'settings') appRoot.innerHTML = settingsPage();
+  else if (state.route.type === 'library') appRoot.innerHTML = cinematicFullLibraryPage(state.route.kind);
   else if (state.route.type === 'detail') appRoot.innerHTML = detailPage(state.route.item, state.route.children || [], state.route.seriesPlayback || null);
   else if (state.route.type === 'person') appRoot.innerHTML = personPage(state.route.profile);
   else if (state.route.type === 'collection') appRoot.innerHTML = collectionDetailPage(state.route.collection, state.route.members);
@@ -1077,12 +1108,14 @@ function visibleElements(selector, root = document) {
 }
 
 function initialFocus() {
+  if (state.route.type === 'library') return document.querySelector('.cinematic-back') || document.getElementById('genre-filter') || document.querySelector('.cinematic-full-library-page .media-card');
   if (state.route.type === 'detail') return document.querySelector('.detail-copy .primary') || document.querySelector('.detail-copy .secondary') || document.querySelector('.back-button');
   if (state.route.type === 'person') return document.querySelector('.cinematic-back, .person-actions button');
   if (state.route.type === 'collection') return document.querySelector('.cinematic-back, .cinematic-collection-detail-page .media-card');
   if (state.route.type === 'settings') return document.querySelector('.cinematic-side-settings, #quality');
   if (state.route.type === 'player') return null;
-  if (state.route.type === 'browse' && ['home', 'movies', 'series', 'watchlist'].includes(state.tab)) return document.querySelector('.cinematic-subnav .active') || document.querySelector('.cinematic-sidebar .active');
+  if (state.route.type === 'browse' && ['movies', 'series'].includes(state.tab)) return document.querySelector('.cinematic-section-nav .active') || document.querySelector('.cinematic-sidebar .active');
+  if (state.route.type === 'browse' && ['home', 'watchlist'].includes(state.tab)) return document.querySelector('.cinematic-sidebar .active');
   if (state.route.type === 'browse' && ['collections', 'search'].includes(state.tab)) return document.querySelector(`.cinematic-sidebar [data-tab="${state.tab}"]`);
   return document.querySelector(`.topbar [data-tab="${state.tab}"]`) || document.querySelector('.topbar button');
 }
@@ -1236,6 +1269,12 @@ function navigateDpad(key) {
   }
   if (active.matches('video')) return false;
 
+  if (active.matches('.cinematic-back')) {
+    if (key === 'ArrowLeft') return focusNode(document.querySelector(`.cinematic-sidebar [data-tab="${state.tab}"]`));
+    if (key === 'ArrowRight' || key === 'ArrowDown') return focusNode(document.getElementById('genre-filter') || document.querySelector('.cinematic-full-library-page .media-card, .detail-copy .primary, .detail-copy .secondary'));
+    return false;
+  }
+
   const navButtons = visibleElements('.topbar button');
   const cinematicSidebarNode = active.closest('.cinematic-sidebar');
   if (cinematicSidebarNode) {
@@ -1245,13 +1284,14 @@ function navigateDpad(key) {
     if (key === 'ArrowDown') return focusNode(buttons[index + 1]);
     if (key === 'ArrowRight') {
       if (state.route.type === 'settings') return focusNode(document.getElementById('quality'));
+      if (state.route.type === 'library') return focusNode(document.querySelector('.cinematic-back, #genre-filter, .cinematic-full-library-page .media-card'));
       if (state.tab === 'search') return focusNode(document.getElementById('search-input'));
       if (state.tab === 'collections') return focusNode(document.querySelector('.cinematic-collection-card'));
-      return focusNode(document.querySelector('.cinematic-subnav .active, .cinematic-hero .primary, .cinematic-hero .secondary, .cinematic-rows .media-card'));
+      return focusNode(document.querySelector('.cinematic-section-nav .active, .cinematic-hero .primary, .cinematic-hero .secondary, .cinematic-rows .media-card'));
     }
     return false;
   }
-  const cinematicTabs = active.closest('.cinematic-subnav');
+  const cinematicTabs = active.closest('.cinematic-section-nav');
   if (cinematicTabs) {
     const buttons = visibleElements('button', cinematicTabs);
     const index = buttons.indexOf(active);
@@ -1614,6 +1654,12 @@ document.addEventListener('click', async (event) => {
   const { action, key } = target.dataset;
   if (action !== 'more') document.querySelectorAll('.cinematic-more-menu:not([hidden])').forEach((menu) => { menu.hidden = true; });
   if (action === 'tab') { state.tab = target.dataset.tab; state.genre = null; state.route = { type: 'browse' }; render(); }
+  else if (action === 'open-library') {
+    const kind = target.dataset.kind === 'series' ? 'series' : 'movies';
+    state.tab = kind;
+    state.genre = null;
+    pushRoute({ type: 'library', kind });
+  }
   else if (action === 'search-filter') {
     state.searchFilter = target.dataset.filter || 'all';
     refreshCinematicSearchResults({ focusFilter: true });
@@ -1757,7 +1803,7 @@ document.addEventListener('keydown', (event) => {
     return;
   }
   if (!editing && !event.ctrlKey && !event.metaKey && !event.altKey && /^[a-z]$/i.test(event.key)
-    && state.route.type === 'browse' && state.layout === 'grid' && ['movies', 'series'].includes(state.tab)) {
+    && state.route.type === 'library' && ['movies', 'series'].includes(state.route.kind)) {
     event.preventDefault();
     jumpToLetter(event.key);
     return;
@@ -1858,12 +1904,14 @@ window.__runMinovaQa = async function runMinovaQa() {
   await wait(120);
   check('Custom Minova title bar exposes all three window controls', document.querySelectorAll('.window-controls [data-window-action]').length === 3, document.querySelectorAll('.window-controls [data-window-action]').length);
   check('Initial D-pad focus lands on selected Home tab', document.activeElement?.dataset?.tab === 'home', activeLabel());
+  check('Home has no redundant Movies and TV Shows switcher', !document.querySelector('.cinematic-home-page .cinematic-section-nav, .cinematic-home-page .cinematic-subnav'), document.querySelector('.cinematic-home-page .cinematic-hero')?.textContent.trim() || 'missing');
   await press('ArrowRight');
-  check('Right moves Home to Movies', document.activeElement?.dataset?.tab === 'movies', activeLabel());
-  document.activeElement?.click(); await wait(120);
+  check('Right from Home enters the featured actions', Boolean(document.activeElement?.closest('.cinematic-hero .actions')), activeLabel());
+  document.querySelector('.cinematic-sidebar [data-tab="movies"]')?.click(); await wait(120);
   check('Enter/click opens the cinematic Movies library', state.tab === 'movies' && Boolean(document.querySelector('.cinematic-library-page')), state.tab);
   check('Cinematic navigation keeps every library destination available', ['search', 'movies', 'series', 'watchlist', 'collections'].every((tab) => document.querySelector(`.cinematic-sidebar [data-tab="${tab}"]`)) && Boolean(document.querySelector('.cinematic-sidebar [data-action="settings"]')), document.querySelector('.cinematic-sidebar')?.textContent.trim() || 'missing');
-  check('Movies and TV Shows use a compact cinematic switcher', document.querySelectorAll('.cinematic-subnav [data-action="tab"]').length === 2 && document.querySelector('.cinematic-subnav .active')?.dataset?.tab === 'movies', document.querySelector('.cinematic-subnav .active')?.textContent || 'missing');
+  const movieSectionNav = document.querySelector('.cinematic-section-nav');
+  check('Movies shows only Movies and Library at the top', movieSectionNav?.querySelector('.active')?.textContent === 'Movies' && movieSectionNav?.querySelector('[data-action="open-library"]')?.textContent === 'Library' && !movieSectionNav?.querySelector('[data-tab="series"]'), movieSectionNav?.textContent.trim() || 'missing');
   check('Movies render a full-bleed artwork layer', Boolean(document.querySelector('.cinematic-hero-bg img, .cinematic-hero-fallback')), document.querySelector('.cinematic-hero-bg')?.className || 'missing');
   const cinemaTitles = [...document.querySelectorAll('.cinematic-rows .section-title')].map((title) => title.textContent);
   check('Movies expose Continue Watching and Recently Added rows', cinemaTitles.includes('Continue Watching') && cinemaTitles.includes('Recently Added'), cinemaTitles.join(', '));
@@ -1877,11 +1925,31 @@ window.__runMinovaQa = async function runMinovaQa() {
   const firstPoster = document.querySelector('.cinematic-poster-section .cinematic-poster-art');
   const posterRect = firstPoster?.getBoundingClientRect();
   check('Library discovery titles use portrait poster artwork', Boolean(posterRect) && Math.abs(posterRect.width / posterRect.height - (2 / 3)) < .04, posterRect?.toJSON?.() || 'missing');
-  firstCinemaCard?.focus(); await wait(80);
-  const focusedCinemaItem = findItem(firstCinemaCard?.dataset?.key);
+  movieSectionNav?.querySelector('[data-action="open-library"]')?.click(); await wait(140);
+  check('Movies Library opens as a separate back-navigable screen', state.route.type === 'library' && state.route.kind === 'movies' && Boolean(document.querySelector('.cinematic-full-library-page .cinematic-back')), `${state.route.type}:${state.route.kind}`);
+  check('Movies Library starts on its Back control', document.activeElement?.classList.contains('cinematic-back'), activeLabel());
+  await press('ArrowDown');
+  check('Down from Library Back reaches the genre selector', document.activeElement?.id === 'genre-filter', activeLabel());
+  const movieLibraryCards = [...document.querySelectorAll('.cinematic-full-library-page .cinematic-poster-card')];
+  check('Movies Library is a complete portrait grid', movieLibraryCards.length === state.catalog.movies.length && movieLibraryCards.every((cardNode) => findItem(cardNode.dataset.key)?.kind === 'movie'), `${movieLibraryCards.length}:${state.catalog.movies.length}`);
+  check('Movies Library includes a right-side A–Z rail and genre selector', document.querySelectorAll('.cinematic-alpha-index button').length === 26 && Boolean(document.getElementById('genre-filter')), `${document.querySelectorAll('.cinematic-alpha-index button').length}:${Boolean(document.getElementById('genre-filter'))}`);
+  const movieGenreSelect = document.getElementById('genre-filter');
+  const movieGenre = movieGenreSelect?.options[1]?.value;
+  if (movieGenreSelect && movieGenre) {
+    movieGenreSelect.value = movieGenre;
+    movieGenreSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    await wait(100);
+  }
+  const expectedGenreMovies = state.catalog.movies.filter((item) => item.genres?.includes(movieGenre)).length;
+  check('Movie genre selector filters the portrait grid', Boolean(movieGenre) && document.querySelectorAll('.cinematic-full-library-page .cinematic-poster-card').length === expectedGenreMovies, `${movieGenre}:${document.querySelectorAll('.cinematic-full-library-page .cinematic-poster-card').length}:${expectedGenreMovies}`);
+  document.querySelector('.cinematic-back')?.click(); await wait(120);
+  check('Back from Movies Library returns to curated movie rows', state.route.type === 'browse' && state.tab === 'movies' && Boolean(document.querySelector('.cinematic-library-page .cinematic-rows')), `${state.route.type}:${state.tab}`);
+  const liveFirstCinemaCard = document.querySelector('.cinematic-rows .cinematic-card');
+  liveFirstCinemaCard?.focus(); await wait(80);
+  const focusedCinemaItem = findItem(liveFirstCinemaCard?.dataset?.key);
   check('Focusing a title updates the selected-title hero', document.getElementById('cinematic-hero-title')?.textContent === focusedCinemaItem?.title, document.getElementById('cinematic-hero-title')?.textContent || 'missing');
   await press('ArrowRight');
-  check('Right moves across a cinematic shelf', Boolean(document.activeElement?.dataset?.key) && document.activeElement !== firstCinemaCard, activeLabel());
+  check('Right moves across a cinematic shelf', Boolean(document.activeElement?.dataset?.key) && document.activeElement !== liveFirstCinemaCard, activeLabel());
 
   document.activeElement.click(); await wait(220);
   check('Cinematic card opens details', state.route.type === 'detail' && Boolean(document.querySelector('.cinematic-detail-copy')), state.route.type);
@@ -2004,8 +2072,8 @@ window.__runMinovaQa = async function runMinovaQa() {
   check('Shelf left arrow appears after moving right', Number(scrollableSection?.querySelector('.rail')?.scrollLeft) > 6 && !scrollableSection?.querySelector('.rail-arrow-left')?.classList.contains('is-hidden'), scrollableSection?.querySelector('.rail')?.scrollLeft || 0);
   recordLocalViewingSignal({ kind: 'movie', ratingKey: 'demo-1' }); render(); await wait(120);
   check('A new viewing signal immediately refreshes the recommendation anchor', [...document.querySelectorAll('.home-shelves .section-title')].some((title) => title.textContent === 'Because you watched The Last Horizon'), [...document.querySelectorAll('.home-shelves .section-title')].map((title) => title.textContent).join(', '));
-  await press('ArrowDown');
-  check('Down from Recommended enters the featured actions', Boolean(document.activeElement?.closest('.cinematic-hero .actions')), activeLabel());
+  check('Home remains free of category switchers after recommendation refreshes', !document.querySelector('.cinematic-home-page .cinematic-section-nav, .cinematic-home-page .cinematic-subnav'), document.querySelector('.cinematic-home-page .cinematic-hero')?.textContent.trim() || 'missing');
+  document.querySelector('.cinematic-hero .primary, .cinematic-hero .secondary')?.focus();
   await press('ArrowDown');
   const firstShelfKey = document.activeElement?.dataset?.key;
   check('Down from the featured actions enters the first shelf', Boolean(firstShelfKey), activeLabel());
@@ -2053,6 +2121,12 @@ window.__runMinovaQa = async function runMinovaQa() {
   check('Back returns from a collection', state.route.type === 'browse' && state.tab === 'collections', `${state.route.type}:${state.tab}`);
 
   document.querySelector('[data-tab="series"]').click(); await wait(140);
+  const seriesSectionNav = document.querySelector('.cinematic-section-nav');
+  check('TV Shows shows only TV Shows and Library at the top', seriesSectionNav?.querySelector('.active')?.textContent === 'TV Shows' && seriesSectionNav?.querySelector('[data-action="open-library"]')?.textContent === 'Library' && !seriesSectionNav?.querySelector('[data-tab="movies"]'), seriesSectionNav?.textContent.trim() || 'missing');
+  seriesSectionNav?.querySelector('[data-action="open-library"]')?.click(); await wait(140);
+  const seriesLibraryCards = [...document.querySelectorAll('.cinematic-full-library-page .cinematic-poster-card')];
+  check('TV Shows Library is a complete portrait grid with browsing controls', state.route.type === 'library' && state.route.kind === 'series' && seriesLibraryCards.length === state.catalog.shows.length && document.querySelectorAll('.cinematic-alpha-index button').length === 26 && Boolean(document.getElementById('genre-filter')), `${state.route.type}:${state.route.kind}:${seriesLibraryCards.length}`);
+  document.querySelector('.cinematic-back')?.click(); await wait(120);
   const seriesLibraryActions = document.querySelector('.cinematic-library-page[data-cinematic-kind="series"] .cinematic-hero .actions');
   const seriesFirstHeading = document.querySelector('.cinematic-library-page[data-cinematic-kind="series"] .cinematic-rows .cinematic-section-heading-copy');
   const seriesHeroShelfGap = (seriesFirstHeading?.getBoundingClientRect().top || 0) - (seriesLibraryActions?.getBoundingClientRect().bottom || 0);
