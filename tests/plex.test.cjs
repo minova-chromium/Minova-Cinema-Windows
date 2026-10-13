@@ -52,6 +52,19 @@ test('uses the parent show artwork behind episode details', () => {
   assert.equal(episode.secondaryTitle, 'Example Series  •  S2 E4');
 });
 
+test('maps playable Plex trailers from title extras', () => {
+  const movie = mapMetadata({
+    ratingKey: '42', type: 'movie', title: 'Example',
+    Extras: { Metadata: [{
+      ratingKey: '4201', type: 'clip', extraType: 'trailer', title: 'Official Trailer', duration: 120000,
+      Media: [{ Part: [{ id: 71, key: '/library/parts/71/trailer.mp4' }] }],
+    }] },
+  });
+  assert.equal(movie.extras.length, 1);
+  assert.equal(movie.extras[0].extraType, 'trailer');
+  assert.equal(movie.extras[0].playback.directPath, '/library/parts/71/trailer.mp4');
+});
+
 test('rewrites HLS playlists through the private media protocol', () => {
   const source = 'http://plex.local:32400/video/master.m3u8';
   const playlist = '#EXTM3U\n#EXT-X-MAP:URI="init.mp4"\nsegment-1.ts\n';

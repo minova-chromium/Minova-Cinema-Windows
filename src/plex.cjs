@@ -118,6 +118,9 @@ function mapMetadata(metadata = {}) {
   const durationMs = metadata.duration || part?.duration || null;
   const viewOffsetMs = metadata.viewOffset || 0;
   const seasonComplete = metadata.leafCount > 0 && metadata.viewedLeafCount === metadata.leafCount;
+  const extras = Array.isArray(metadata.Extras?.Metadata)
+    ? metadata.Extras.Metadata.map((extra) => mapMetadata(extra))
+    : [];
   return {
     ratingKey: String(metadata.ratingKey || ''),
     providerRatingKey: String(metadata.guid || '').split('/').filter(Boolean).at(-1) || null,
@@ -148,6 +151,8 @@ function mapMetadata(metadata = {}) {
     grandparentRatingKey: metadata.grandparentRatingKey || null,
     isWatched: kind === 'show' || kind === 'season' ? seasonComplete : (metadata.viewCount || 0) > 0,
     audienceRating: metadata.audienceRating ?? metadata.rating ?? null,
+    extraType: metadata.extraType || metadata.subtype || null,
+    extras,
     credits: [
       ...(metadata.Role || []).map((person) => mapCredit(person, 'Cast')),
       ...(metadata.Director || []).map((person) => mapCredit(person, 'Director')),

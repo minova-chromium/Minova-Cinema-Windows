@@ -466,6 +466,7 @@ function cinematicSidebar(active = state.tab) {
       ${item('movies', '▤', 'Movies')}
       ${item('series', '▭', 'TV Shows')}
       ${item('watchlist', '♡', 'Watchlist')}
+      ${item('collections', '◫', 'Collections')}
     </nav>
     <button class="cinematic-side-button cinematic-side-settings" data-action="settings" aria-label="Settings" title="Settings"><span aria-hidden="true">⚙</span></button>
   </aside>`;
@@ -494,9 +495,55 @@ function cinematicCard(item, { episode = false } = {}) {
 
 function cinematicShelf(title, items, { episode = false } = {}) {
   if (!items?.length) return '';
-  return `<section class="section cinematic-section"><div class="cinematic-section-heading"><h2 class="section-title">${esc(title)}</h2><span>${items.length} ${items.length === 1 ? 'title' : 'titles'}</span></div>
+  return `<section class="section cinematic-section"><div class="cinematic-section-heading"><div class="cinematic-section-heading-copy"><h2 class="section-title">${esc(title)}</h2><span>${items.length} ${items.length === 1 ? 'title' : 'titles'}</span></div><div class="section-controls" aria-label="${esc(title)} shelf controls"><button class="rail-arrow rail-arrow-left is-hidden" type="button" data-action="rail-scroll" data-direction="-1" tabindex="-1" aria-label="Scroll ${esc(title)} left">‹</button><button class="rail-arrow rail-arrow-right" type="button" data-action="rail-scroll" data-direction="1" tabindex="-1" aria-label="Scroll ${esc(title)} right">›</button></div></div>
     <div class="rail-shell"><div class="rail">${items.slice(0, 40).map((item) => cinematicCard(item, { episode })).join('')}</div></div>
   </section>`;
+}
+
+function cinematicHomePage() {
+  const { movies, shows, continueWatching, watchlist } = state.catalog;
+  const library = uniqueTitles([...movies, ...shows]);
+  const recommended = uniqueTitles(topPicks(library)).slice(0, 24);
+  const becauseRow = recommendationRows(library, 1)[0] || null;
+  const newReleases = uniqueTitles(newestReleases(library)).slice(0, 24);
+  const rated = uniqueTitles(topRated(library)).slice(0, 24);
+  const selected = library.find((item) => item.ratingKey === state.cinematicHeroKey)
+    || recommended.find((item) => item.kind === 'movie')
+    || recommended[0]
+    || continueWatching[0]
+    || library[0];
+  state.cinematicHeroKey = selected?.ratingKey || null;
+  const background = selected?.backdropPath || selected?.posterPath;
+  return `<div class="screen cinematic-page cinematic-library-page cinematic-home-page" data-cinematic-kind="home">
+    ${cinematicSidebar('home')}
+    <main class="cinematic-main">
+      <div id="cinematic-hero-bg" class="cinematic-hero-bg">${background ? `<img src="${art(background)}" alt="" aria-hidden="true">` : '<span class="cinematic-hero-fallback" aria-hidden="true"></span>'}</div>
+      ${cinematicBrandHeader()}
+      <div class="cinematic-scroll">
+        <section class="cinematic-hero">
+          <div class="cinematic-subnav" aria-label="Cinema navigation"><button data-action="tab" data-tab="home" class="active">Recommended</button><button data-action="tab" data-tab="movies">Movies</button><button data-action="tab" data-tab="series">TV Shows</button></div>
+          <div class="cinematic-hero-copy">
+            <span class="cinematic-kicker">Recommended for you</span>
+            <h1 id="cinematic-hero-title">${esc(selected?.title || 'Your Cinema')}</h1>
+            <p class="cinematic-meta" id="cinematic-hero-meta">${esc(selected ? metadata(selected) : '')}</p>
+            <p class="cinematic-summary" id="cinematic-hero-summary">${esc(selected?.summary || 'Your Plex library, shaped around what you watch.')}</p>
+            ${selected ? `<div class="actions cinematic-actions">${selected.kind !== 'show' ? `<button class="primary" data-action="play" data-key="${esc(selected.ratingKey)}">▶ <span>${selected.progress > 0 ? 'Resume' : 'Play'}</span></button>` : ''}<button class="secondary" data-action="open" data-key="${esc(selected.ratingKey)}">More info</button></div>` : ''}
+          </div>
+        </section>
+        <div class="home-shelves cinematic-rows">
+          ${cinematicShelf('Continue Watching', uniqueTitles(continueWatching))}
+          ${cinematicShelf('Top Picks for You', recommended)}
+          ${becauseRow ? cinematicShelf(becauseRow.title, becauseRow.items) : ''}
+          ${cinematicShelf('New Releases', newReleases)}
+          ${cinematicShelf('Top Rated', rated)}
+          ${cinematicShelf('Hidden Gems', uniqueTitles(hiddenGems(library)).slice(0, 24))}
+          ${cinematicShelf('Recently Added', uniqueTitles([...library].sort((left, right) => Number(right.addedAt || 0) - Number(left.addedAt || 0))).slice(0, 24))}
+          ${cinematicShelf('Watch Again', uniqueTitles(watchAgain(library)).slice(0, 24))}
+          ${cinematicShelf('From Your Watchlist', uniqueTitles(watchlist))}
+        </div>
+      </div>
+    </main>
+  </div>`;
 }
 
 function cinematicLibraryPage(items, kind) {
@@ -559,10 +606,10 @@ function searchPage() {
 function browsePage() {
   let body;
   let items = [];
+  if (state.tab === 'home') return cinematicHomePage();
   if (state.tab === 'movies') return cinematicLibraryPage(state.catalog.movies, 'movies');
   if (state.tab === 'series') return cinematicLibraryPage(state.catalog.shows, 'series');
-  if (state.tab === 'home') body = `<div class="browse-scroll home-shelves">${homeShelves()}</div>`;
-  else if (state.tab === 'collections') body = collectionPage();
+  if (state.tab === 'collections') body = collectionPage();
   else if (state.tab === 'search') body = searchPage();
   else {
     items = state.tab === 'movies' ? state.catalog.movies : state.tab === 'series' ? state.catalog.shows : state.catalog.watchlist;
@@ -667,6 +714,7 @@ function detailPage(item, children = [], seriesPlayback = null) {
   }).slice(0, 12);
   const directors = (item.credits || []).filter((person) => /director/i.test(person.role || ''));
   const cast = (item.credits || []).filter((person) => !/director/i.test(person.role || ''));
+  const trailer = (item.extras || []).find((extra) => /trailer/i.test(extra.extraType || extra.title || '') && extra.ratingKey);
   const creditButtons = (people) => people.slice(0, 8).map((person) => `<button class="cinematic-credit" data-action="person" data-person-id="${esc(person.personId || '')}" data-person-name="${esc(person.name)}" data-person-role="${esc(person.role)}" data-person-image="${esc(person.imagePath || '')}" ${person.personId ? '' : 'disabled'}>${esc(person.name)}</button>`).join('<span>•</span>');
   const episodes = isSeries ? (state.route.episodes || []) : [];
   const activeEpisode = episodes.find((episode) => episode.ratingKey === seriesPlayback?.episode?.ratingKey) || episodes[0] || seriesPlayback?.episode || null;
@@ -684,9 +732,9 @@ function detailPage(item, children = [], seriesPlayback = null) {
           <p class="detail-summary">${esc(item.summary || 'No summary is available from Plex.')}</p>
           <div class="actions cinematic-actions">
             ${playTarget ? `<button class="primary" data-action="play" data-key="${esc(playTarget.ratingKey)}" data-series-action="${isSeries ? 'true' : 'false'}">▶ <span>${playLabel}${isSeries && activeEpisode ? ` S${activeEpisode.seasonNumber || 1} E${activeEpisode.episodeNumber || 1}` : ''}</span></button>` : ''}
-            <button class="secondary cinematic-trailer" data-action="trailer">▶ <span>Trailer</span></button>
+            ${trailer ? `<button class="secondary cinematic-trailer" data-action="play" data-key="${esc(trailer.ratingKey)}">▶ <span>Trailer</span></button>` : ''}
             <button class="cinematic-round-action" data-action="watchlist" data-key="${esc(item.ratingKey)}" data-provider="${esc(item.providerRatingKey || '')}" data-value="${inWatchlist ? 'false' : 'true'}" aria-label="${inWatchlist ? 'Remove from' : 'Add to'} watchlist" title="${inWatchlist ? 'Remove from' : 'Add to'} watchlist">${inWatchlist ? '✓' : '+'}</button>
-            <button class="cinematic-round-action" data-action="more" aria-label="More options" title="More options">•••</button>
+            <span class="cinematic-more-wrap"><button class="cinematic-round-action" data-action="more" aria-label="More options" title="More options" aria-expanded="false">•••</button><span class="cinematic-more-menu" hidden><button data-action="watched" data-key="${esc(item.ratingKey)}" data-value="${item.isWatched ? 'false' : 'true'}">${item.isWatched ? 'Mark unwatched' : 'Mark watched'}</button><button data-action="watchlist" data-key="${esc(item.ratingKey)}" data-provider="${esc(item.providerRatingKey || '')}" data-value="${inWatchlist ? 'false' : 'true'}">${inWatchlist ? 'Remove from watchlist' : 'Add to watchlist'}</button></span></span>
           </div>
           ${item.progress > 0 && item.progress < .98 ? `<div class="cinematic-title-progress"><span style="width:${Math.round(item.progress * 100)}%"></span></div>` : ''}
           ${!isSeries && (directors.length || cast.length) ? `<div class="cinematic-credits">${directors.length ? `<div><strong>Director</strong>${creditButtons(directors)}</div>` : ''}${cast.length ? `<div><strong>Cast</strong>${creditButtons(cast)}</div>` : ''}</div>` : ''}
@@ -799,7 +847,7 @@ function bindPage() {
     const key = node.dataset.key;
     const item = [...state.catalog.movies, ...state.catalog.shows, ...state.catalog.continueWatching].find((entry) => entry.ratingKey === key);
     if (state.tab === 'home' && item) updateHero(item);
-    if (state.route.type === 'browse' && ['movies', 'series'].includes(state.tab) && item) updateCinematicHero(item);
+    if (state.route.type === 'browse' && ['home', 'movies', 'series'].includes(state.tab) && item) updateCinematicHero(item);
     if (node.matches('.cinematic-episode-card')) updateCinematicEpisode(node);
     node.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
   }));
@@ -810,7 +858,7 @@ function bindPage() {
     rail.addEventListener('scroll', refresh, { passive: true });
     rail.addEventListener('wheel', (event) => {
       event.preventDefault();
-      rail.closest('.browse-scroll, .detail-page, .search-page, .collections-page')?.scrollBy({ top: event.deltaY, behavior: 'auto' });
+      rail.closest('.cinematic-scroll, .cinematic-detail-scroll, .browse-scroll, .detail-page, .search-page, .collections-page')?.scrollBy({ top: event.deltaY, behavior: 'auto' });
     }, { passive: false });
     requestAnimationFrame(refresh);
   });
@@ -867,7 +915,7 @@ function initialFocus() {
   if (state.route.type === 'collection') return document.querySelector('.collections-page .back-button, .collections-page .media-card');
   if (state.route.type === 'settings') return document.querySelector('.topbar [data-action="settings"], #quality');
   if (state.route.type === 'player') return null;
-  if (state.route.type === 'browse' && ['movies', 'series'].includes(state.tab)) return document.querySelector('.cinematic-subnav .active, .cinematic-sidebar .active');
+  if (state.route.type === 'browse' && ['home', 'movies', 'series'].includes(state.tab)) return document.querySelector('.cinematic-subnav .active') || document.querySelector('.cinematic-sidebar .active');
   return document.querySelector(`.topbar [data-tab="${state.tab}"]`) || document.querySelector('.topbar button');
 }
 
@@ -1012,6 +1060,15 @@ function navigateDpad(key) {
   if (active.matches('video')) return false;
 
   const navButtons = visibleElements('.topbar button');
+  const cinematicTabs = active.closest('.cinematic-subnav');
+  if (cinematicTabs) {
+    const buttons = visibleElements('button', cinematicTabs);
+    const index = buttons.indexOf(active);
+    if (key === 'ArrowLeft') return focusNode(buttons[index - 1]);
+    if (key === 'ArrowRight') return focusNode(buttons[index + 1]);
+    if (key === 'ArrowDown') return focusNode(document.querySelector('.cinematic-hero .primary, .cinematic-hero .secondary, .cinematic-rows .media-card'));
+    if (key === 'ArrowUp') return focusNode(document.querySelector(`.cinematic-sidebar [data-tab="${state.tab}"]`));
+  }
   if (active.closest('.topbar')) {
     const index = navButtons.indexOf(active);
     if (key === 'ArrowLeft') return focusNode(navButtons[index - 1]);
@@ -1079,9 +1136,8 @@ function updateCinematicHero(item) {
   if (title) title.textContent = item.title || '';
   if (meta) meta.textContent = metadata(item);
   if (summary) summary.textContent = item.summary || '';
-  document.querySelectorAll('.cinematic-hero .actions [data-key]').forEach((button) => { button.dataset.key = item.ratingKey; });
-  const playLabel = document.querySelector('.cinematic-hero .primary span');
-  if (playLabel) playLabel.textContent = item.progress > 0 ? 'Resume' : 'Play';
+  const actions = document.querySelector('.cinematic-hero .actions');
+  if (actions) actions.innerHTML = `${item.kind !== 'show' ? `<button class="primary" data-action="play" data-key="${esc(item.ratingKey)}">▶ <span>${item.progress > 0 ? 'Resume' : 'Play'}</span></button>` : ''}<button class="secondary" data-action="open" data-key="${esc(item.ratingKey)}">More info</button>`;
 }
 
 function updateCinematicEpisode(cardNode) {
@@ -1209,6 +1265,17 @@ async function syncCatalog(button = null, { silent = false } = {}) {
   }
 }
 
+async function refreshAfterLibraryMutation() {
+  const route = state.route;
+  await syncCatalog(null, { silent: true });
+  if (route.type === 'detail' && route.item?.ratingKey) {
+    const item = await window.minova.details(route.item.ratingKey).catch(() => route.item);
+    const seriesPlayback = item?.kind === 'show' ? await resolveSeriesPlayback(item, route.children || []) : route.seriesPlayback;
+    state.route = { ...route, item, seriesPlayback };
+  }
+  render();
+}
+
 function pushRoute(route) { state.routeStack.push(state.route); state.route = route; render(); }
 
 function goBack() {
@@ -1298,8 +1365,12 @@ function stopPlayback() {
 
 document.addEventListener('click', async (event) => {
   const target = event.target.closest('[data-action]');
-  if (!target) return;
+  if (!target) {
+    document.querySelectorAll('.cinematic-more-menu:not([hidden])').forEach((menu) => { menu.hidden = true; });
+    return;
+  }
   const { action, key } = target.dataset;
+  if (action !== 'more') document.querySelectorAll('.cinematic-more-menu:not([hidden])').forEach((menu) => { menu.hidden = true; });
   if (action === 'tab') { state.tab = target.dataset.tab; state.genre = null; state.route = { type: 'browse' }; render(); }
   else if (action === 'open') openDetails(key);
   else if (action === 'person') openPerson({
@@ -1332,8 +1403,14 @@ document.addEventListener('click', async (event) => {
   else if (action === 'plex-select-server') selectPlexServer(target.dataset.serverId);
   else if (action === 'toggle-manual') { state.manualSetup = !state.manualSetup; render(); }
   else if (action === 'rail-scroll') scrollRail(target);
-  else if (action === 'trailer') showToast('Trailer playback will appear here when Plex provides a trailer.');
-  else if (action === 'more') showToast('More title options are coming to this trial.');
+  else if (action === 'more') {
+    const menu = target.closest('.cinematic-more-wrap')?.querySelector('.cinematic-more-menu');
+    if (menu) {
+      menu.hidden = !menu.hidden;
+      target.setAttribute('aria-expanded', String(!menu.hidden));
+      if (!menu.hidden) requestAnimationFrame(() => menu.querySelector('button')?.focus());
+    }
+  }
   else if (action === 'season') {
     const episodes = await window.minova.children(key).catch(() => []);
     state.route = { ...state.route, activeSeasonKey: key, episodes };
@@ -1383,10 +1460,10 @@ document.addEventListener('click', async (event) => {
   } else if (action === 'disconnect') {
     await window.minova.disconnect(); state.config = await window.minova.config(); state.catalog = null; state.routeStack = []; state.route = { type: 'browse' }; state.plexSignIn = { status: 'idle', code: '', authorizationUrl: '', servers: [], error: null }; render();
   } else if (action === 'watched') {
-    try { await window.minova.setWatched(key, target.dataset.value === 'true'); showToast('Plex watched state updated.'); await loadCatalog(); }
+    try { await window.minova.setWatched(key, target.dataset.value === 'true'); showToast('Plex watched state updated.'); await refreshAfterLibraryMutation(); }
     catch (error) { showToast(errorMessage(error)); }
   } else if (action === 'watchlist') {
-    try { await window.minova.setWatchlisted(target.dataset.provider, target.dataset.value === 'true'); showToast('Plex Watchlist updated.'); await loadCatalog(); }
+    try { await window.minova.setWatchlisted(target.dataset.provider, target.dataset.value === 'true'); showToast('Plex Watchlist updated.'); await refreshAfterLibraryMutation(); }
     catch (error) { showToast(errorMessage(error)); }
   }
 });
@@ -1576,7 +1653,7 @@ window.__runMinovaQa = async function runMinovaQa() {
 
   document.querySelector('[data-tab="home"]').click(); await wait(140);
   check('Home returns focus to selected header tab', document.activeElement?.dataset?.tab === 'home', activeLabel());
-  check('Desktop Home no longer renders the large hero', !document.querySelector('.hero, .hero-bg'), document.querySelector('.hero, .hero-bg') ? 'present' : 'removed');
+  check('Home uses the same cinematic hero as Movies and TV Shows', Boolean(document.querySelector('.cinematic-home-page .cinematic-hero')) && Boolean(document.querySelector('.cinematic-home-page .cinematic-sidebar')), document.querySelector('.cinematic-home-page') ? 'cinematic' : 'missing');
   const homeTitles = [...document.querySelectorAll('.home-shelves .section-title')].map((title) => title.textContent);
   check('Home provides discovery and personalized shelves', homeTitles.includes('New Releases') && homeTitles.includes('Top Picks for You') && homeTitles.some((title) => title.startsWith('Because you watched ')), homeTitles.join(', '));
   const becauseSections = [...document.querySelectorAll('.home-shelves .section')].filter((section) => section.querySelector('.section-title')?.textContent.startsWith('Because you watched '));
@@ -1605,7 +1682,7 @@ window.__runMinovaQa = async function runMinovaQa() {
   check('Scrollable shelves show a clean heading-level right arrow', Boolean(scrollableSection) && !scrollableSection.querySelector('.rail-arrow-right')?.classList.contains('is-hidden'), scrollableSection ? 'visible' : 'missing');
   check('Shelf left arrow stays hidden before moving right', scrollableSection?.querySelector('.rail-arrow-left')?.classList.contains('is-hidden'), scrollableSection?.querySelector('.rail-arrow-left')?.className || 'missing');
   const wheelRail = scrollableSection?.querySelector('.rail');
-  const homePage = document.querySelector('.home-shelves');
+  const homePage = document.querySelector('.cinematic-home-page .cinematic-scroll');
   const railBeforeWheel = Number(wheelRail?.scrollLeft || 0);
   homePage.scrollTop = 0;
   wheelRail?.dispatchEvent(new WheelEvent('wheel', { deltaY: 260, bubbles: true, cancelable: true })); await wait(100);
@@ -1615,8 +1692,10 @@ window.__runMinovaQa = async function runMinovaQa() {
   recordLocalViewingSignal({ kind: 'movie', ratingKey: 'demo-1' }); render(); await wait(120);
   check('A new viewing signal immediately refreshes the recommendation anchor', [...document.querySelectorAll('.home-shelves .section-title')].some((title) => title.textContent === 'Because you watched The Last Horizon'), [...document.querySelectorAll('.home-shelves .section-title')].map((title) => title.textContent).join(', '));
   await press('ArrowDown');
+  check('Down from Recommended enters the featured actions', Boolean(document.activeElement?.closest('.cinematic-hero .actions')), activeLabel());
+  await press('ArrowDown');
   const firstShelfKey = document.activeElement?.dataset?.key;
-  check('Down from Home enters the first shelf directly', Boolean(firstShelfKey), activeLabel());
+  check('Down from the featured actions enters the first shelf', Boolean(firstShelfKey), activeLabel());
   await press('ArrowRight');
   check('Right moves within a shelf', Boolean(document.activeElement?.dataset?.key) && document.activeElement.dataset.key !== firstShelfKey, activeLabel());
   const upperShelfKey = document.activeElement?.dataset?.key;

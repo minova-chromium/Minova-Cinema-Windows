@@ -854,7 +854,7 @@ function createWindow() {
       if (captureView === 'grid-click') {
         await mainWindow.webContents.executeJavaScript("document.querySelector('[data-action=\"layout\"]')?.click()");
         await new Promise((resolve) => setTimeout(resolve, 250));
-      } else if (captureView === 'movies' || captureView === 'series') {
+      } else if (captureView === 'home' || captureView === 'movies' || captureView === 'series') {
         await mainWindow.webContents.executeJavaScript("document.querySelector('.cinematic-rows .cinematic-card')?.focus()");
         await new Promise((resolve) => setTimeout(resolve, 180));
       } else if (captureView === 'plex-signin-waiting') {
