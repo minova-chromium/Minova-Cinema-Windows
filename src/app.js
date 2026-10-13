@@ -383,7 +383,8 @@ function homeShelves() {
     ...row,
     items: allocate(row.items),
   }));
-  const personalizedTopPicks = allocate(topPicks(library));
+  const personalKeys = new Set(personalRows.flatMap((row) => row.items.map((item) => item.ratingKey)));
+  const personalizedTopPicks = allocate(topPicks(library).filter((item) => !personalKeys.has(item.ratingKey)));
   const favoriteRow = favoriteGenreRow(library);
   const favoriteItems = favoriteRow ? allocate(favoriteRow.items) : [];
   const comparisonRows = [...personalRows.map((row) => row.items), personalizedTopPicks];
@@ -538,8 +539,11 @@ function cinematicHomePage() {
   const { movies, shows, continueWatching, watchlist } = state.catalog;
   const library = uniqueTitles([...movies, ...shows]);
   const unfinished = unfinishedContinueWatching(continueWatching);
-  const recommended = uniqueTitles(topPicks(library)).slice(0, 24);
-  const becauseRow = recommendationRows(library, 1)[0] || null;
+  const becauseCandidate = recommendationRows(library, 1)[0] || null;
+  const becauseLimit = Math.min(24, Math.max(2, Math.floor(library.length / 2)));
+  const becauseRow = becauseCandidate ? { ...becauseCandidate, items: uniqueTitles(becauseCandidate.items).slice(0, becauseLimit) } : null;
+  const becauseKeys = new Set((becauseRow?.items || []).map((item) => item.ratingKey));
+  const recommended = uniqueTitles(topPicks(library)).filter((item) => !becauseKeys.has(item.ratingKey)).slice(0, 24);
   const newReleases = uniqueTitles(newestReleases(library)).slice(0, 24);
   const rated = uniqueTitles(topRated(library)).slice(0, 24);
   const selected = library.find((item) => item.ratingKey === state.cinematicHeroKey)
@@ -1878,6 +1882,11 @@ window.__runMinovaQa = async function runMinovaQa() {
   const becauseAnchor = [...state.catalog.movies, ...state.catalog.shows].find((item) => item.title === becauseAnchorTitle);
   check('Home shows exactly one recent Because you watched shelf', becauseSections.length === 1 && becauseAnchorTitle === 'Parallel', `${becauseSections.length}:${becauseAnchorTitle}`);
   check('Because you watched never recommends the anchor itself', Boolean(becauseAnchor) && !becauseSections[0]?.querySelector(`[data-key="${becauseAnchor.ratingKey}"]`), becauseAnchor?.ratingKey || 'missing anchor');
+  const topPicksSection = [...document.querySelectorAll('.home-shelves .section')].find((section) => section.querySelector('.section-title')?.textContent === 'Top Picks for You');
+  const topPickKeys = new Set([...topPicksSection.querySelectorAll('.media-card')].map((cardNode) => cardNode.dataset.key));
+  const becauseKeys = [...becauseSections[0].querySelectorAll('.media-card')].map((cardNode) => cardNode.dataset.key);
+  const personalOverlap = becauseKeys.filter((key) => topPickKeys.has(key));
+  check('Top Picks and Because you watched contain no duplicate titles', personalOverlap.length === 0, personalOverlap.join(',') || 'zero overlap');
   check('Home offers several distinct recommendation types', homeTitles.includes('Top Rated') && homeTitles.includes('Hidden Gems') && homeTitles.includes('Watch Again') && homeTitles.length >= 7, homeTitles.join(', '));
   check('Home does not duplicate Movies or Series library lists', !homeTitles.includes('Movies') && !homeTitles.includes('Series'), homeTitles.join(', '));
   const posterSections = [...document.querySelectorAll('.home-shelves .cinematic-poster-section')];
