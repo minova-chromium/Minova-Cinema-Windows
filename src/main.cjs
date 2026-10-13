@@ -227,10 +227,11 @@ function demoCatalog() {
     ['Drama', 'Adventure'], ['Science Fiction', 'Thriller'], ['Crime', 'Drama'],
     ['Adventure', 'Thriller'], ['Drama', 'Mystery'],
   ];
+  const demoArtwork = ['demo-cosmos.svg', 'demo-storm.svg', 'demo-aurora.svg', 'demo-sun.svg'];
   const make = (id, title, kind, year, progress = 0, options = {}) => ({
     ratingKey: `demo-${id}`, title, kind, year, summary: 'A cinematic selection from your personal Plex library.',
     contentRating: 'PG-13', durationMs: 6600000, viewOffsetMs: 6600000 * progress, progress,
-    posterPath: null, backdropPath: null, genres: options.genres || genreSets[id % genreSets.length],
+    posterPath: options.posterPath || `asset:${demoArtwork[(id + 1) % demoArtwork.length]}`, backdropPath: options.backdropPath || `asset:${demoArtwork[id % demoArtwork.length]}`, genres: options.genres || genreSets[id % genreSets.length],
     isWatched: Boolean(options.isWatched), viewedCount: options.isWatched ? 1 : 0,
     lastViewedAt: options.lastViewedAt || null, audienceRating: 6.6 + (id % 4) * .7,
     addedAt: 1790000000 - id * 84000, releaseDate: `${year}-${String((id % 9) + 1).padStart(2, '0')}-15`,
@@ -248,7 +249,7 @@ function demoCatalog() {
     make(14, 'After Midnight', 'movie', 2023), make(15, 'The Signal', 'movie', 2025),
   ];
   const shows = [
-    make(6, 'Atlas Station', 'show', 2026, 0, { genres: ['Drama', 'Mystery'], isWatched: true, lastViewedAt: 1790500000 }),
+    make(6, 'Atlas Station', 'show', 2026, 0, { genres: ['Drama', 'Mystery'], isWatched: true, lastViewedAt: 1790500000, backdropPath: 'asset:demo-storm.svg', posterPath: 'asset:demo-storm.svg' }),
     make(7, 'After the Rain', 'show', 2025, 0, { genres: ['Drama', 'Mystery'] }),
     make(8, 'The Archive', 'show', 2024, 0, { genres: ['Drama', 'Mystery'] }),
   ];
@@ -853,6 +854,9 @@ function createWindow() {
       if (captureView === 'grid-click') {
         await mainWindow.webContents.executeJavaScript("document.querySelector('[data-action=\"layout\"]')?.click()");
         await new Promise((resolve) => setTimeout(resolve, 250));
+      } else if (captureView === 'movies' || captureView === 'series') {
+        await mainWindow.webContents.executeJavaScript("document.querySelector('.cinematic-rows .cinematic-card')?.focus()");
+        await new Promise((resolve) => setTimeout(resolve, 180));
       } else if (captureView === 'plex-signin-waiting') {
         await mainWindow.webContents.executeJavaScript("window.__showPlexSignInPreview?.('waiting')");
         await new Promise((resolve) => setTimeout(resolve, 120));

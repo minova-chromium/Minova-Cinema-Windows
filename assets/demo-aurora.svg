@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900">
+  <defs>
+    <linearGradient id="night" x2="1" y2="1"><stop stop-color="#07131d"/><stop offset=".6" stop-color="#10294a"/><stop offset="1" stop-color="#071119"/></linearGradient>
+    <linearGradient id="aurora" x2="1"><stop stop-color="#16d8e4" stop-opacity="0"/><stop offset=".35" stop-color="#16d8e4" stop-opacity=".72"/><stop offset=".7" stop-color="#24d3b5" stop-opacity=".42"/><stop offset="1" stop-color="#1769ff" stop-opacity="0"/></linearGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#night)"/>
+  <path d="M-100 320C280 70 470 470 850 190s630-40 900-180" fill="none" stroke="url(#aurora)" stroke-width="170" opacity=".72"/>
+  <path d="M-80 250C290 20 520 390 820 130s610-30 850-120" fill="none" stroke="#6bf0df" stroke-width="18" opacity=".25"/>
+  <g fill="#e9ffff" opacity=".8"><circle cx="220" cy="120" r="3"/><circle cx="410" cy="210" r="2"/><circle cx="740" cy="80" r="3"/><circle cx="1080" cy="140" r="2"/><circle cx="1410" cy="92" r="3"/></g>
+  <path d="M0 695 180 560 315 650 510 420 690 645 880 485 1040 620 1240 470 1415 610 1600 500V900H0Z" fill="#09151c"/>
+  <path d="M0 760 230 690 420 735 660 620 920 755 1180 650 1400 735 1600 680V900H0Z" fill="#03070b"/>
+</svg>

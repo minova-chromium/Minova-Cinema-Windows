@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900">
+  <defs>
+    <linearGradient id="sky" x2="1" y2="1"><stop stop-color="#06111f"/><stop offset=".48" stop-color="#173c61"/><stop offset="1" stop-color="#f19965"/></linearGradient>
+    <radialGradient id="planet"><stop stop-color="#f8e6d4"/><stop offset=".72" stop-color="#92b8d2"/><stop offset="1" stop-color="#172b49"/></radialGradient>
+    <linearGradient id="land" y2="1"><stop stop-color="#203b4d"/><stop offset="1" stop-color="#04080d"/></linearGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#sky)"/>
+  <circle cx="1120" cy="160" r="310" fill="url(#planet)" opacity=".92"/>
+  <ellipse cx="1120" cy="170" rx="470" ry="55" fill="none" stroke="#e7d0c1" stroke-width="20" opacity=".55" transform="rotate(-12 1120 170)"/>
+  <g fill="#dff8ff" opacity=".85"><circle cx="760" cy="98" r="3"/><circle cx="690" cy="188" r="2"/><circle cx="1380" cy="80" r="3"/><circle cx="520" cy="116" r="2"/><circle cx="940" cy="34" r="2"/></g>
+  <path d="M0 700 220 560 390 640 610 430 790 650 980 510 1180 650 1410 480 1600 570V900H0Z" fill="url(#land)"/>
+  <path d="M0 768 250 690 440 730 650 600 860 755 1090 680 1280 740 1510 630 1600 670V900H0Z" fill="#050a10"/>
+  <g fill="#0b1721"><rect x="1200" y="410" width="30" height="245"/><rect x="1245" y="485" width="54" height="180"/><rect x="1312" y="450" width="25" height="225"/><rect x="1350" y="515" width="70" height="165"/></g>
+  <circle cx="1010" cy="610" r="15" fill="#13d7eb"/><rect x="1004" y="625" width="12" height="90" rx="5" fill="#081119"/>
+</svg>

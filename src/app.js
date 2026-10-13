@@ -10,6 +10,7 @@ const state = {
   layout: 'rows',
   genre: null,
   hero: null,
+  cinematicHeroKey: null,
   route: { type: 'browse' },
   routeStack: [],
   search: '',
@@ -44,6 +45,10 @@ function art(path) {
   const builtInAssets = {
     'asset:minova-symbol-color.png': '../assets/minova-symbol-color.png',
     'asset:minova-cinema-wordmark.png': '../assets/minova-cinema-wordmark.png',
+    'asset:demo-cosmos.svg': '../assets/demo-cosmos.svg',
+    'asset:demo-storm.svg': '../assets/demo-storm.svg',
+    'asset:demo-aurora.svg': '../assets/demo-aurora.svg',
+    'asset:demo-sun.svg': '../assets/demo-sun.svg',
   };
   return builtInAssets[path] || (path ? `minova-plex://media/${base64Url(path)}` : '');
 }
@@ -451,6 +456,87 @@ function toolbar(title, items) {
   </div>`;
 }
 
+function cinematicSidebar(active = state.tab) {
+  const item = (tab, glyph, label) => `<button class="cinematic-side-button ${active === tab ? 'active' : ''}" data-action="tab" data-tab="${tab}" aria-label="${label}" title="${label}"><span aria-hidden="true">${glyph}</span></button>`;
+  return `<aside class="cinematic-sidebar" aria-label="Cinema navigation">
+    <button class="cinematic-side-brand" data-action="tab" data-tab="home" aria-label="Minova Cinema home"><img src="../assets/minova-symbol-color.png" alt=""></button>
+    <nav>
+      ${item('home', '⌂', 'Home')}
+      ${item('search', '⌕', 'Search')}
+      ${item('movies', '▤', 'Movies')}
+      ${item('series', '▭', 'TV Shows')}
+      ${item('watchlist', '♡', 'Watchlist')}
+    </nav>
+    <button class="cinematic-side-button cinematic-side-settings" data-action="settings" aria-label="Settings" title="Settings"><span aria-hidden="true">⚙</span></button>
+  </aside>`;
+}
+
+function cinematicBrandHeader({ back = false } = {}) {
+  return `<div class="cinematic-brand-header">
+    ${back ? '<button class="cinematic-back" data-action="back" aria-label="Back">‹</button>' : ''}
+    ${logoMarkup('compact')}
+  </div>`;
+}
+
+function cinematicCard(item, { episode = false } = {}) {
+  const imagePath = item.backdropPath || item.posterPath;
+  const subtitle = episode
+    ? `${item.episodeNumber || ''}  ${item.title || 'Episode'}${item.durationMs ? `  ·  ${formatTime(item.durationMs)}` : ''}`
+    : item.title;
+  return `<button class="media-card landscape cinematic-card${episode ? ' cinematic-episode-card' : ''}" data-action="${episode ? 'play' : 'open'}" data-key="${esc(item.ratingKey)}" data-focus-key="${esc(item.ratingKey)}" ${episode ? `data-episode-title="${esc(item.title)}" data-episode-number="${esc(item.episodeNumber || '')}" data-episode-summary="${esc(item.summary || '')}"` : ''} aria-label="${episode ? 'Play ' : 'Open '}${esc(item.title)}">
+    ${imagePath ? `<img src="${art(imagePath)}" alt="">` : '<span class="cinematic-card-fallback" aria-hidden="true"></span>'}
+    ${item.isWatched ? '<span class="badge">✓</span>' : ''}
+    <span class="cinematic-card-shade"></span>
+    <span class="cinematic-card-title">${esc(subtitle)}</span>
+    ${item.progress > 0 && item.progress < .98 ? `<span class="progress"><span style="width:${Math.round(item.progress * 100)}%"></span></span>` : ''}
+  </button>`;
+}
+
+function cinematicShelf(title, items, { episode = false } = {}) {
+  if (!items?.length) return '';
+  return `<section class="section cinematic-section"><div class="cinematic-section-heading"><h2 class="section-title">${esc(title)}</h2><span>${items.length} ${items.length === 1 ? 'title' : 'titles'}</span></div>
+    <div class="rail-shell"><div class="rail">${items.slice(0, 40).map((item) => cinematicCard(item, { episode })).join('')}</div></div>
+  </section>`;
+}
+
+function cinematicLibraryPage(items, kind) {
+  const isSeries = kind === 'series';
+  const selected = items.find((item) => item.ratingKey === state.cinematicHeroKey)
+    || items.find((item) => item.ratingKey === state.hero?.ratingKey)
+    || items[0];
+  state.cinematicHeroKey = selected?.ratingKey || null;
+  const continueItems = isSeries
+    ? uniqueTitles(items.filter((item) => viewingActivity(item))).slice(0, 12)
+    : uniqueTitles(state.catalog.continueWatching.filter((item) => item.kind !== 'episode' && item.kind !== 'show')).slice(0, 12);
+  const recentItems = [...items].sort((left, right) => Number(right.addedAt || 0) - Number(left.addedAt || 0)).slice(0, 18);
+  const background = selected?.backdropPath || selected?.posterPath;
+  return `<div class="screen cinematic-page cinematic-library-page" data-cinematic-kind="${kind}">
+    ${cinematicSidebar(kind)}
+    <main class="cinematic-main">
+      <div id="cinematic-hero-bg" class="cinematic-hero-bg">${background ? `<img src="${art(background)}" alt="" aria-hidden="true">` : '<span class="cinematic-hero-fallback" aria-hidden="true"></span>'}</div>
+      ${cinematicBrandHeader()}
+      <div class="cinematic-scroll">
+        <section class="cinematic-hero">
+          <div class="cinematic-subnav" aria-label="Cinema library"><button data-action="tab" data-tab="movies" class="${isSeries ? '' : 'active'}">Movies</button><button data-action="tab" data-tab="series" class="${isSeries ? 'active' : ''}">TV Shows</button></div>
+          <div class="cinematic-hero-copy">
+            <span class="cinematic-kicker">${isSeries ? 'Minova original series' : 'Featured from your library'}</span>
+            <h1 id="cinematic-hero-title">${esc(selected?.title || (isSeries ? 'TV Shows' : 'Movies'))}</h1>
+            <p class="cinematic-meta" id="cinematic-hero-meta">${esc(selected ? metadata(selected) : '')}</p>
+            <p class="cinematic-summary" id="cinematic-hero-summary">${esc(selected?.summary || '')}</p>
+            ${selected ? `<div class="actions cinematic-actions">${selected.kind !== 'show' ? `<button class="primary" data-action="play" data-key="${esc(selected.ratingKey)}">▶ <span>${selected.progress > 0 ? 'Resume' : 'Play'}</span></button>` : ''}<button class="secondary" data-action="open" data-key="${esc(selected.ratingKey)}">More info</button></div>` : ''}
+          </div>
+        </section>
+        <div class="cinematic-rows">
+          ${cinematicShelf('Continue Watching', continueItems.length ? continueItems : items.slice(0, 8))}
+          ${cinematicShelf('Recently Added', recentItems)}
+          ${items.length ? cinematicShelf(isSeries ? 'All TV Shows' : 'More From Your Library', sortAlphabetically(items)) : ''}
+          ${items.length ? '' : `<div class="empty">No ${isSeries ? 'TV shows' : 'movies'} were found.</div>`}
+        </div>
+      </div>
+    </main>
+  </div>`;
+}
+
 function collectionPage() {
   const collections = state.catalog.collections || [];
   return `<div class="collections-page"><h1 class="page-heading">Collections</h1><p class="page-subheading">Movie and series collections from Plex</p>
@@ -473,6 +559,8 @@ function searchPage() {
 function browsePage() {
   let body;
   let items = [];
+  if (state.tab === 'movies') return cinematicLibraryPage(state.catalog.movies, 'movies');
+  if (state.tab === 'series') return cinematicLibraryPage(state.catalog.shows, 'series');
   if (state.tab === 'home') body = `<div class="browse-scroll home-shelves">${homeShelves()}</div>`;
   else if (state.tab === 'collections') body = collectionPage();
   else if (state.tab === 'search') body = searchPage();
@@ -570,23 +658,47 @@ function detailPage(item, children = [], seriesPlayback = null) {
   const bg = item.backdropPath || item.posterPath;
   const playTarget = item.kind === 'show' ? seriesPlayback?.episode : !['season'].includes(item.kind) ? item : null;
   const playLabel = item.kind === 'show' ? (seriesPlayback?.hasProgress ? 'Resume' : 'Play') : item.progress > 0 ? 'Resume' : 'Play';
-  return `<div class="screen detail-page">
-    <div class="detail-bg">${bg ? `<img src="${art(bg)}" alt="" aria-hidden="true">` : ''}</div>
-    <button class="back-button" data-action="back" aria-label="Back">←</button>
-    <section class="detail-copy">
-      <div class="eyebrow">${esc(item.kind === 'show' ? 'Series' : item.kind === 'episode' ? item.secondaryTitle || 'Episode' : 'Movie')}</div>
-      <h1>${esc(item.title)}</h1><p class="meta">${esc(metadata(item))}</p>
-      ${item.genres?.length ? `<p class="genres">${esc(item.genres.join('  •  '))}</p>` : ''}
-      ${item.tagline ? `<p class="tagline">${esc(item.tagline)}</p>` : ''}
-      <p class="detail-summary">${esc(item.summary || 'No summary is available from Plex.')}</p>
-      <div class="actions">
-        ${playTarget ? `<button class="primary" data-action="play" data-key="${esc(playTarget.ratingKey)}" data-series-action="${item.kind === 'show' ? 'true' : 'false'}">▶ &nbsp;${playLabel}</button>` : ''}
-        <button class="secondary" data-action="watchlist" data-key="${esc(item.ratingKey)}" data-provider="${esc(item.providerRatingKey || '')}" data-value="${inWatchlist ? 'false' : 'true'}">${inWatchlist ? 'Remove from Plex Watchlist' : 'Add to Plex Watchlist'}</button>
-        <button class="secondary" data-action="watched" data-key="${esc(item.ratingKey)}" data-value="${item.isWatched ? 'false' : 'true'}">${item.isWatched ? 'Mark unwatched' : 'Mark watched'}</button>
+  const isSeries = item.kind === 'show';
+  const relatedPool = isSeries ? state.catalog.shows : state.catalog.movies;
+  const related = relatedPool.filter((entry) => entry.ratingKey !== item.ratingKey).sort((left, right) => {
+    const leftMatch = (left.genres || []).filter((genre) => item.genres?.includes(genre)).length;
+    const rightMatch = (right.genres || []).filter((genre) => item.genres?.includes(genre)).length;
+    return rightMatch - leftMatch || Number(right.addedAt || 0) - Number(left.addedAt || 0);
+  }).slice(0, 12);
+  const directors = (item.credits || []).filter((person) => /director/i.test(person.role || ''));
+  const cast = (item.credits || []).filter((person) => !/director/i.test(person.role || ''));
+  const creditButtons = (people) => people.slice(0, 8).map((person) => `<button class="cinematic-credit" data-action="person" data-person-id="${esc(person.personId || '')}" data-person-name="${esc(person.name)}" data-person-role="${esc(person.role)}" data-person-image="${esc(person.imagePath || '')}" ${person.personId ? '' : 'disabled'}>${esc(person.name)}</button>`).join('<span>•</span>');
+  const episodes = isSeries ? (state.route.episodes || []) : [];
+  const activeEpisode = episodes.find((episode) => episode.ratingKey === seriesPlayback?.episode?.ratingKey) || episodes[0] || seriesPlayback?.episode || null;
+  return `<div class="screen detail-page cinematic-page cinematic-detail-page ${isSeries ? 'cinematic-series-detail' : 'cinematic-movie-detail'}">
+    ${cinematicSidebar(isSeries ? 'series' : 'movies')}
+    <main class="cinematic-main">
+      <div class="detail-bg cinematic-hero-bg">${bg ? `<img src="${art(bg)}" alt="" aria-hidden="true">` : '<span class="cinematic-hero-fallback" aria-hidden="true"></span>'}</div>
+      ${cinematicBrandHeader({ back: true })}
+      <div class="cinematic-detail-scroll">
+        <section class="detail-copy cinematic-detail-copy">
+          ${isSeries ? '<div class="cinematic-subnav detail-subnav"><button data-action="tab" data-tab="movies">Movies</button><button data-action="tab" data-tab="series" class="active">TV Shows</button></div>' : ''}
+          <span class="cinematic-kicker">${esc(isSeries ? 'TV series' : 'Feature presentation')}</span>
+          <h1>${esc(item.title)}</h1>
+          <p class="cinematic-meta">${esc(metadata(item))}${item.genres?.length ? `  •  ${esc(item.genres.slice(0, 3).join('  •  '))}` : ''}</p>
+          <p class="detail-summary">${esc(item.summary || 'No summary is available from Plex.')}</p>
+          <div class="actions cinematic-actions">
+            ${playTarget ? `<button class="primary" data-action="play" data-key="${esc(playTarget.ratingKey)}" data-series-action="${isSeries ? 'true' : 'false'}">▶ <span>${playLabel}${isSeries && activeEpisode ? ` S${activeEpisode.seasonNumber || 1} E${activeEpisode.episodeNumber || 1}` : ''}</span></button>` : ''}
+            <button class="secondary cinematic-trailer" data-action="trailer">▶ <span>Trailer</span></button>
+            <button class="cinematic-round-action" data-action="watchlist" data-key="${esc(item.ratingKey)}" data-provider="${esc(item.providerRatingKey || '')}" data-value="${inWatchlist ? 'false' : 'true'}" aria-label="${inWatchlist ? 'Remove from' : 'Add to'} watchlist" title="${inWatchlist ? 'Remove from' : 'Add to'} watchlist">${inWatchlist ? '✓' : '+'}</button>
+            <button class="cinematic-round-action" data-action="more" aria-label="More options" title="More options">•••</button>
+          </div>
+          ${item.progress > 0 && item.progress < .98 ? `<div class="cinematic-title-progress"><span style="width:${Math.round(item.progress * 100)}%"></span></div>` : ''}
+          ${!isSeries && (directors.length || cast.length) ? `<div class="cinematic-credits">${directors.length ? `<div><strong>Director</strong>${creditButtons(directors)}</div>` : ''}${cast.length ? `<div><strong>Cast</strong>${creditButtons(cast)}</div>` : ''}</div>` : ''}
+        </section>
+        ${isSeries ? `<section class="cinematic-series-content detail-section">
+          <div class="cinematic-season-tabs"><button class="cinematic-overview-tab">Overview</button>${children.map((season, index) => `<button data-action="season" data-key="${esc(season.ratingKey)}" class="${(state.route.activeSeasonKey || children[0]?.ratingKey) === season.ratingKey ? 'active' : ''}">${esc(season.title || `Season ${index + 1}`)}</button>`).join('')}</div>
+          ${activeEpisode ? `<div class="cinematic-episode-copy"><h2><span id="cinematic-episode-number">${esc(activeEpisode.episodeNumber || '')}</span> <span id="cinematic-episode-title">${esc(activeEpisode.title)}</span></h2><p id="cinematic-episode-summary">${esc(activeEpisode.summary || item.summary || '')}</p></div>` : ''}
+          ${cinematicShelf('Episodes', episodes, { episode: true })}
+        </section>` : `<section class="detail-section cinematic-related">${cinematicShelf('More Like This', related)}</section>`}
+        ${item.credits?.length ? `<section class="detail-section cast-section cinematic-cast-access"><h2 class="section-title">Cast & Crew</h2><div class="rail">${item.credits.slice(0,30).map((person) => `<button class="credit-card" data-action="person" data-person-id="${esc(person.personId || '')}" data-person-name="${esc(person.name)}" data-person-role="${esc(person.role)}" data-person-image="${esc(person.imagePath || '')}" ${person.personId ? '' : 'disabled'} aria-label="Open ${esc(person.name)}, ${esc(person.role)}"><span class="credit-avatar">${person.imagePath ? `<img src="${art(person.imagePath)}" alt="${esc(person.name)}" loading="lazy">` : `<span class="credit-initial">${esc(person.name?.[0]?.toUpperCase() || '?')}</span>`}</span><strong>${esc(person.name)}</strong><span class="credit-role">${esc(person.role)}</span></button>`).join('')}</div></section>` : ''}
       </div>
-    </section>
-    ${children.length ? `<section class="detail-section">${shelf(item.kind === 'show' ? 'Seasons' : 'Episodes', children)}</section>` : ''}
-    ${item.credits?.length ? `<section class="detail-section cast-section"><h2 class="section-title">Cast & Crew</h2><div class="rail">${item.credits.slice(0,30).map((person) => `<button class="credit-card" data-action="person" data-person-id="${esc(person.personId || '')}" data-person-name="${esc(person.name)}" data-person-role="${esc(person.role)}" data-person-image="${esc(person.imagePath || '')}" ${person.personId ? '' : 'disabled'} aria-label="Open ${esc(person.name)}, ${esc(person.role)}"><span class="credit-avatar">${person.imagePath ? `<img src="${art(person.imagePath)}" alt="${esc(person.name)}" loading="lazy">` : `<span class="credit-initial">${esc(person.name?.[0]?.toUpperCase() || '?')}</span>`}</span><strong>${esc(person.name)}</strong><span class="credit-role">${esc(person.role)}</span></button>`).join('')}</div></section>` : ''}
+    </main>
   </div>`;
 }
 
@@ -687,6 +799,8 @@ function bindPage() {
     const key = node.dataset.key;
     const item = [...state.catalog.movies, ...state.catalog.shows, ...state.catalog.continueWatching].find((entry) => entry.ratingKey === key);
     if (state.tab === 'home' && item) updateHero(item);
+    if (state.route.type === 'browse' && ['movies', 'series'].includes(state.tab) && item) updateCinematicHero(item);
+    if (node.matches('.cinematic-episode-card')) updateCinematicEpisode(node);
     node.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
   }));
   document.querySelectorAll('.section').forEach((section) => {
@@ -753,6 +867,7 @@ function initialFocus() {
   if (state.route.type === 'collection') return document.querySelector('.collections-page .back-button, .collections-page .media-card');
   if (state.route.type === 'settings') return document.querySelector('.topbar [data-action="settings"], #quality');
   if (state.route.type === 'player') return null;
+  if (state.route.type === 'browse' && ['movies', 'series'].includes(state.tab)) return document.querySelector('.cinematic-subnav .active, .cinematic-sidebar .active');
   return document.querySelector(`.topbar [data-tab="${state.tab}"]`) || document.querySelector('.topbar button');
 }
 
@@ -792,7 +907,7 @@ function navigateRail(active, key) {
       const previousCards = visibleElements('.media-card, .credit-card[tabindex="0"]', rails[railIndex - 1]);
       return focusNode(closestHorizontal(previousCards, active));
     }
-    return focusNode(document.querySelector('.hero .primary, .hero .secondary, #genre-filter')) || focusHeaderFor(active);
+    return focusNode(document.querySelector('.cinematic-hero .primary, .cinematic-hero .secondary, .hero .primary, .hero .secondary, #genre-filter')) || focusHeaderFor(active);
   }
   if (key === 'ArrowDown' && railIndex >= 0 && railIndex < rails.length - 1) {
     const nextCards = visibleElements('.media-card, .credit-card[tabindex="0"]', rails[railIndex + 1]);
@@ -916,7 +1031,7 @@ function navigateDpad(key) {
     const actions = visibleElements('button', actionRow); const index = actions.indexOf(active);
     if (key === 'ArrowLeft') return focusNode(actions[index - 1]);
     if (key === 'ArrowRight') return focusNode(actions[index + 1]);
-    if (key === 'ArrowUp') return state.route.type === 'detail' ? focusNode(document.querySelector('.back-button')) : focusHeaderFor(active);
+    if (key === 'ArrowUp') return state.route.type === 'detail' ? focusNode(document.querySelector('.cinematic-back, .back-button')) : focusHeaderFor(active);
     if (key === 'ArrowDown') return focusNode(document.querySelector('.section .media-card, .detail-section .media-card, .detail-section .credit-card'));
   }
 
@@ -951,6 +1066,31 @@ function updateHero(item) {
   if (title) title.textContent = item.title;
   if (meta) meta.textContent = metadata(item);
   if (summary) summary.textContent = item.summary || item.tagline || '';
+}
+
+function updateCinematicHero(item) {
+  state.cinematicHeroKey = item.ratingKey;
+  const background = document.getElementById('cinematic-hero-bg');
+  const imagePath = item.backdropPath || item.posterPath;
+  if (background && imagePath) background.innerHTML = `<img src="${art(imagePath)}" alt="" aria-hidden="true">`;
+  const title = document.getElementById('cinematic-hero-title');
+  const meta = document.getElementById('cinematic-hero-meta');
+  const summary = document.getElementById('cinematic-hero-summary');
+  if (title) title.textContent = item.title || '';
+  if (meta) meta.textContent = metadata(item);
+  if (summary) summary.textContent = item.summary || '';
+  document.querySelectorAll('.cinematic-hero .actions [data-key]').forEach((button) => { button.dataset.key = item.ratingKey; });
+  const playLabel = document.querySelector('.cinematic-hero .primary span');
+  if (playLabel) playLabel.textContent = item.progress > 0 ? 'Resume' : 'Play';
+}
+
+function updateCinematicEpisode(cardNode) {
+  const number = document.getElementById('cinematic-episode-number');
+  const title = document.getElementById('cinematic-episode-title');
+  const summary = document.getElementById('cinematic-episode-summary');
+  if (number) number.textContent = cardNode.dataset.episodeNumber || '';
+  if (title) title.textContent = cardNode.dataset.episodeTitle || '';
+  if (summary) summary.textContent = cardNode.dataset.episodeSummary || state.route.item?.summary || '';
 }
 
 async function connect(event) {
@@ -1025,9 +1165,19 @@ async function loadCatalog() {
     state.hero = state.catalog.continueWatching[0] || state.catalog.movies[0] || state.catalog.shows[0] || null;
     state.loading = false; state.error = null; state.route = { type: 'browse' };
     if (['movies', 'grid-click'].includes(state.config.captureView)) state.tab = 'movies';
+    else if (state.config.captureView === 'series') state.tab = 'series';
     else if (state.config.captureView === 'collections') state.tab = 'collections';
     else if (['settings', 'update-dialog'].includes(state.config.captureView)) state.route = { type: 'settings' };
     else if (state.config.captureView === 'detail') state.route = { type: 'detail', item: state.catalog.movies[0] || state.catalog.shows[0], children: [] };
+    else if (state.config.captureView === 'series-detail') {
+      state.tab = 'series';
+      const item = state.catalog.shows[0];
+      const children = item ? await window.minova.children(item.ratingKey) : [];
+      const seriesPlayback = item ? await resolveSeriesPlayback(item, children) : null;
+      const activeSeason = children.find((season) => season.ratingKey === seriesPlayback?.episode?.parentRatingKey) || children[0];
+      const episodes = activeSeason ? await window.minova.children(activeSeason.ratingKey).catch(() => []) : [];
+      state.route = { type: 'detail', item, children, seriesPlayback, activeSeasonKey: activeSeason?.ratingKey || null, episodes };
+    }
     if (state.config.demoMode && state.config.captureView === 'update-dialog') {
       state.update = { status: 'available', currentVersion: '1.0.3', availableVersion: '1.0.4', progress: 0, message: 'Minova Cinema 1.0.4 is available.' };
     }
@@ -1100,7 +1250,9 @@ async function openDetails(key) {
     const item = await window.minova.details(key);
     const children = item?.kind === 'show' || item?.kind === 'season' ? await window.minova.children(key) : [];
     const seriesPlayback = item?.kind === 'show' ? await resolveSeriesPlayback(item, children) : null;
-    state.route = { type: 'detail', item: item || findItem(key), children, seriesPlayback }; render();
+    const activeSeason = item?.kind === 'show' ? children.find((season) => season.ratingKey === seriesPlayback?.episode?.parentRatingKey) || children[0] : null;
+    const episodes = activeSeason ? await window.minova.children(activeSeason.ratingKey).catch(() => []) : [];
+    state.route = { type: 'detail', item: item || findItem(key), children, seriesPlayback, activeSeasonKey: activeSeason?.ratingKey || null, episodes }; render();
   } catch (error) { showToast(errorMessage(error)); goBack(); }
 }
 
@@ -1180,6 +1332,14 @@ document.addEventListener('click', async (event) => {
   else if (action === 'plex-select-server') selectPlexServer(target.dataset.serverId);
   else if (action === 'toggle-manual') { state.manualSetup = !state.manualSetup; render(); }
   else if (action === 'rail-scroll') scrollRail(target);
+  else if (action === 'trailer') showToast('Trailer playback will appear here when Plex provides a trailer.');
+  else if (action === 'more') showToast('More title options are coming to this trial.');
+  else if (action === 'season') {
+    const episodes = await window.minova.children(key).catch(() => []);
+    state.route = { ...state.route, activeSeasonKey: key, episodes };
+    render();
+    requestAnimationFrame(() => document.querySelector(`.cinematic-season-tabs [data-key="${CSS.escape(key)}"]`)?.focus());
+  }
   else if (action === 'alpha-jump') jumpToLetter(target.dataset.letter);
   else if (action === 'sync') await syncCatalog(target);
   else if (action === 'check-update') {
@@ -1371,42 +1531,34 @@ window.__runMinovaQa = async function runMinovaQa() {
   await press('ArrowRight');
   check('Right moves Home to Movies', document.activeElement?.dataset?.tab === 'movies', activeLabel());
   document.activeElement?.click(); await wait(120);
-  check('Enter/click opens Movies', state.tab === 'movies' && Boolean(document.querySelector('.toolbar')), state.tab);
-  const desktopTools = document.querySelector('.nav-tools');
-  check('Search, layout, and Settings are grouped on the right', Boolean(desktopTools?.querySelector('[data-tab="search"]')) && Boolean(desktopTools?.querySelector('[data-action="layout"]')) && Boolean(desktopTools?.querySelector('[data-action="settings"]')), desktopTools?.textContent.trim() || 'missing');
-  check('Genre selector exposes every available genre', document.querySelectorAll('#genre-filter option').length === genresFor(state.catalog.movies).length + 1, document.querySelectorAll('#genre-filter option').length);
-  const headerLayout = document.querySelector('.topbar [data-action="layout"]');
-  check('Movies header exposes the real Rows/Grid toggle', Boolean(headerLayout), headerLayout?.getAttribute('aria-label') || 'missing');
-  headerLayout?.click(); await wait(140);
-  check('Header Grid toggle creates the alphabetical catalog grid', state.layout === 'grid' && Boolean(document.querySelector('.alpha-index')) && Boolean(document.querySelector('.grid .media-card')), `${state.layout}:${document.querySelectorAll('.grid .media-card').length}`);
-  check('Grid defaults to one compact continuous layout', Boolean(document.querySelector('.continuous-grid')) && !document.querySelector('.alpha-group'), document.querySelector('.continuous-grid') ? 'continuous' : 'separated');
-  await press('ArrowDown');
-  check('Down from header enters the genre selector after grid render', document.activeElement?.id === 'genre-filter', activeLabel());
-  await press('ArrowDown');
-  const firstGridKey = document.activeElement?.dataset?.key;
-  check('Down from toolbar enters first grid card', Boolean(firstGridKey), activeLabel());
-  await press('g'); await wait(180);
-  const letterJumpItem = findItem(document.activeElement?.dataset?.key);
-  check('Typing G jumps to the first G title', letterJumpItem?.title?.toUpperCase().startsWith('G'), letterJumpItem?.title || activeLabel());
+  check('Enter/click opens the cinematic Movies library', state.tab === 'movies' && Boolean(document.querySelector('.cinematic-library-page')), state.tab);
+  check('Cinematic navigation keeps Search and Settings available', Boolean(document.querySelector('.cinematic-sidebar [data-tab="search"]')) && Boolean(document.querySelector('.cinematic-sidebar [data-action="settings"]')), document.querySelector('.cinematic-sidebar')?.textContent.trim() || 'missing');
+  check('Movies and TV Shows use a compact cinematic switcher', document.querySelectorAll('.cinematic-subnav [data-action="tab"]').length === 2 && document.querySelector('.cinematic-subnav .active')?.dataset?.tab === 'movies', document.querySelector('.cinematic-subnav .active')?.textContent || 'missing');
+  check('Movies render a full-bleed artwork layer', Boolean(document.querySelector('.cinematic-hero-bg img, .cinematic-hero-fallback')), document.querySelector('.cinematic-hero-bg')?.className || 'missing');
+  const cinemaTitles = [...document.querySelectorAll('.cinematic-rows .section-title')].map((title) => title.textContent);
+  check('Movies expose Continue Watching and Recently Added rows', cinemaTitles.includes('Continue Watching') && cinemaTitles.includes('Recently Added'), cinemaTitles.join(', '));
+  const firstCinemaCard = document.querySelector('.cinematic-rows .cinematic-card');
+  const cinemaRect = firstCinemaCard?.getBoundingClientRect();
+  check('Cinematic library cards use a wide artwork ratio', Boolean(cinemaRect) && Math.abs(cinemaRect.width / cinemaRect.height - (16 / 9)) < .08, cinemaRect?.toJSON?.() || 'missing');
+  firstCinemaCard?.focus(); await wait(80);
+  const focusedCinemaItem = findItem(firstCinemaCard?.dataset?.key);
+  check('Focusing a title updates the selected-title hero', document.getElementById('cinematic-hero-title')?.textContent === focusedCinemaItem?.title, document.getElementById('cinematic-hero-title')?.textContent || 'missing');
   await press('ArrowRight');
-  check('Right moves across the alphabetical grid', Boolean(document.activeElement?.dataset?.key) && document.activeElement.dataset.key !== letterJumpItem?.ratingKey, activeLabel());
-  const beforeDown = document.activeElement?.dataset?.key;
-  await press('ArrowDown');
-  check('Down moves to the next grid row', Boolean(document.activeElement?.dataset?.key) && document.activeElement.dataset.key !== beforeDown, activeLabel());
+  check('Right moves across a cinematic shelf', Boolean(document.activeElement?.dataset?.key) && document.activeElement !== firstCinemaCard, activeLabel());
 
-  document.activeElement.click(); await wait(180);
-  check('Grid card opens details', state.route.type === 'detail' && Boolean(document.querySelector('.detail-copy')), state.route.type);
+  document.activeElement.click(); await wait(220);
+  check('Cinematic card opens details', state.route.type === 'detail' && Boolean(document.querySelector('.cinematic-detail-copy')), state.route.type);
   check('Details receives an action focus target', Boolean(document.activeElement?.closest('.detail-copy .actions')), activeLabel());
   check('Details reserves a cinematic artwork layer', Boolean(document.querySelector('.detail-bg')), document.querySelector('.detail-bg')?.className);
   check('Movie Cast & Crew uses actor portrait cards', Boolean(document.querySelector('.credit-card .credit-avatar img')), document.querySelectorAll('.credit-card .credit-avatar img').length);
-  const firstCreditRole = document.querySelector('.credit-card .credit-role');
-  check('Cast names and roles stay visible without initial scrolling', Boolean(firstCreditRole) && firstCreditRole.getBoundingClientRect().bottom <= innerHeight, firstCreditRole?.getBoundingClientRect().bottom);
+  const firstCreditRole = document.querySelector('.cinematic-credits');
+  check('Movie detail keeps director and cast in the hero', Boolean(firstCreditRole) && firstCreditRole.getBoundingClientRect().bottom <= innerHeight, firstCreditRole?.getBoundingClientRect().bottom);
   const castHeading = document.querySelector('.cast-section > .section-title');
   const firstCastCard = document.querySelector('.cast-section > .rail .credit-card');
   const detailActions = document.querySelector('.detail-copy .actions');
   check('Cast heading aligns with the cast rail', Boolean(castHeading && firstCastCard) && Math.abs(castHeading.getBoundingClientRect().left - firstCastCard.getBoundingClientRect().left) < 3, `${castHeading?.getBoundingClientRect().left}:${firstCastCard?.getBoundingClientRect().left}`);
-  check('Cast section follows the detail actions without a large offset', Boolean(castHeading && detailActions) && castHeading.getBoundingClientRect().top - detailActions.getBoundingClientRect().bottom < 90, castHeading && detailActions ? castHeading.getBoundingClientRect().top - detailActions.getBoundingClientRect().bottom : 'missing');
-  document.querySelector('.credit-card[data-action="person"]')?.click(); await wait(180);
+  check('More Like This emerges directly from the movie hero', Boolean(document.querySelector('.cinematic-related .cinematic-card')) && document.querySelector('.cinematic-related').getBoundingClientRect().top < innerHeight, document.querySelector('.cinematic-related')?.getBoundingClientRect().top || 'missing');
+  document.querySelector('.cinematic-credit[data-action="person"]')?.click(); await wait(180);
   check('Cast card opens a Minova actor profile', state.route.type === 'person' && Boolean(document.querySelector('.person-page .person-biography')), state.route.type);
   check('Actor profile lists titles from the connected library', document.querySelectorAll('.person-page .media-card').length > 0, document.querySelectorAll('.person-page .media-card').length);
   check('Actor profile offers an IMDb link without scraping IMDb', Boolean(document.querySelector('.person-page [data-action="external"]')), document.querySelector('.person-page .person-links')?.textContent.trim() || 'missing');
@@ -1415,14 +1567,12 @@ window.__runMinovaQa = async function runMinovaQa() {
   await press('ArrowRight');
   check('Right moves across detail actions', Boolean(document.activeElement?.closest('.detail-copy .actions')), activeLabel());
   await press('Backspace');
-  check('Back returns to the grid without losing layout', state.route.type === 'browse' && state.layout === 'grid' && Boolean(document.querySelector('.grid')), `${state.route.type}:${state.layout}`);
+  check('Back returns to the cinematic Movies library', state.route.type === 'browse' && state.tab === 'movies' && Boolean(document.querySelector('.cinematic-library-page')), `${state.route.type}:${state.tab}`);
 
-  const returnToRows = document.querySelector('.topbar [data-action="layout"]');
-  returnToRows?.click(); await wait(140);
-  check('Header layout toggle returns to Rows', state.layout === 'rows' && Boolean(document.querySelector('.section .rail')), state.layout);
-  check('Rows include a shelf for every available genre', genresFor(state.catalog.movies).every((genre) => [...document.querySelectorAll('.section-title')].some((title) => title.textContent === genre)), [...document.querySelectorAll('.section-title')].map((title) => title.textContent).join(', '));
+  check('Movies keep the cinematic row presentation', Boolean(document.querySelector('.cinematic-rows .section .rail')), state.layout);
+  check('Movie library retains a complete browse row', [...document.querySelectorAll('.section-title')].some((title) => title.textContent === 'More From Your Library'), [...document.querySelectorAll('.section-title')].map((title) => title.textContent).join(', '));
   check('Movie rows avoid the redundant All titles shelf', ![...document.querySelectorAll('.section-title')].some((title) => title.textContent === 'All titles'), [...document.querySelectorAll('.section-title')].map((title) => title.textContent).join(', '));
-  check('Movie rows include a personalized Because you watched shelf', [...document.querySelectorAll('.section-title')].some((title) => title.textContent.startsWith('Because you watched ')), [...document.querySelectorAll('.section-title')].map((title) => title.textContent).join(', '));
+  check('Movie rows keep the featured hero separate from discovery shelves', Boolean(document.querySelector('.cinematic-hero-copy')) && !document.querySelector('.cinematic-hero-copy .media-card'), document.querySelector('.cinematic-hero-copy')?.textContent.trim() || 'missing');
 
   document.querySelector('[data-tab="home"]').click(); await wait(140);
   check('Home returns focus to selected header tab', document.activeElement?.dataset?.tab === 'home', activeLabel());
@@ -1551,8 +1701,7 @@ window.__runMinovaQa = async function runMinovaQa() {
   document.querySelector('[data-action="save-browsing"]')?.click(); await wait(100);
   check('Separate A–Z sections preference saves from Settings', state.config.splitAlphabetical === true, state.config.splitAlphabetical);
   document.querySelector('[data-tab="movies"]')?.click(); await wait(120);
-  document.querySelector('[data-action="layout"]')?.click(); await wait(120);
-  check('Separated preference renders labeled letter sections', state.layout === 'grid' && Boolean(document.querySelector('.alpha-group')), document.querySelector('.alpha-group')?.dataset?.alphaGroup || 'missing');
+  check('Cinematic Movies remain isolated from the legacy grid preference', Boolean(document.querySelector('.cinematic-library-page')) && !document.querySelector('.alpha-group'), document.querySelector('.cinematic-library-page')?.dataset?.cinematicKind || 'missing');
 
   const failed = results.filter((result) => !result.passed);
   return { passed: failed.length === 0, total: results.length, failed: failed.length, results };

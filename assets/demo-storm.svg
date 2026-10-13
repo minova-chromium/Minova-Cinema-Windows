@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900">
+  <defs>
+    <linearGradient id="ocean" x2="1" y2="1"><stop stop-color="#020811"/><stop offset=".5" stop-color="#0b2e48"/><stop offset="1" stop-color="#13758a"/></linearGradient>
+    <radialGradient id="glow"><stop stop-color="#35e7ff" stop-opacity=".8"/><stop offset="1" stop-color="#35e7ff" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#ocean)"/>
+  <ellipse cx="1240" cy="70" rx="310" ry="150" fill="url(#glow)"/>
+  <path d="M1230 0c-42 160-18 278 8 430" fill="none" stroke="#49dded" stroke-width="9" opacity=".72"/>
+  <g fill="#0b1620" opacity=".94"><ellipse cx="260" cy="210" rx="350" ry="150"/><ellipse cx="660" cy="130" rx="340" ry="170"/><ellipse cx="1040" cy="220" rx="330" ry="170"/><ellipse cx="1450" cy="210" rx="340" ry="180"/></g>
+  <path d="M0 735 210 570 380 660 540 450 720 620 875 510 1040 675 1220 490 1420 650 1600 520V900H0Z" fill="#07131c"/>
+  <path d="M0 790c280-75 520 35 770-15s500-120 830-25v150H0Z" fill="#0b3345"/>
+  <path d="M0 805c290-65 520 60 810 5s510-80 790-5" fill="none" stroke="#76e6ed" stroke-width="8" opacity=".35"/>
+  <g fill="#071018"><rect x="785" y="335" width="250" height="300"/><rect x="820" y="230" width="14" height="405"/><rect x="976" y="270" width="14" height="365"/><path d="m840 370 75-70 75 70Z"/></g>
+  <circle cx="827" cy="232" r="8" fill="#ff6b70"/>
+</svg>
