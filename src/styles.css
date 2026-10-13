@@ -351,6 +351,51 @@ body.fullscreen .content, body.fullscreen .detail-bg { inset-block-start: 0; }
 .cinematic-series-content .cinematic-section-heading { display: none; }
 .cinematic-episode-card.media-card { flex-basis: clamp(300px, 25vw, 410px); }
 .cinematic-episode-card .cinematic-card-title { letter-spacing: .04em; text-transform: none; }
+.cinematic-utility-ambient { position: fixed; z-index: 0; inset: 0; background: radial-gradient(circle at 78% 8%, rgba(22,216,228,.1), transparent 30%), radial-gradient(circle at 28% 75%, rgba(23,105,255,.09), transparent 34%), linear-gradient(135deg, #09131d, #050a0f 58%); }
+.cinematic-utility-ambient::after { content: ""; position: absolute; inset: 0; opacity: .22; background-image: linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px); background-size: 48px 48px; mask-image: linear-gradient(90deg, transparent, #000 35%, #000); }
+.cinematic-utility-scroll { position: relative; z-index: 2; height: 100%; overflow-x: hidden; overflow-y: auto; padding: 112px 0 72px; scrollbar-width: none; }
+.cinematic-utility-scroll::-webkit-scrollbar { display: none; }
+.cinematic-utility-content { padding: 30px 54px 72px; }
+.cinematic-page-heading { max-width: 820px; margin-bottom: 34px; }
+.cinematic-page-heading h1 { margin: 8px 0 0; font-size: clamp(44px, 4.5vw, 72px); font-weight: 540; line-height: 1; letter-spacing: .03em; }
+.cinematic-page-heading p { margin: 14px 0 0; color: #9eb0bf; font-size: 17px; line-height: 1.5; }
+.cinematic-empty { display: grid; min-height: 260px; place-items: center; align-content: center; gap: 8px; color: #8295a7; text-align: center; }
+.cinematic-empty strong { color: var(--white); font-size: 22px; }
+.cinematic-empty span { font-size: 15px; }
+.cinematic-collection-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; }
+.cinematic-collection-card { min-width: 0; overflow: hidden; padding: 0; border: 1px solid rgba(146,174,193,.2); border-radius: 13px; color: var(--white); background: rgba(11,21,30,.82); box-shadow: 0 18px 42px rgba(0,0,0,.18); transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease; }
+.cinematic-collection-card:hover { border-color: rgba(146,174,193,.42); transform: translateY(-2px); }
+.cinematic-collection-card:focus-visible { border-color: var(--cyan); transform: scale(1.018); box-shadow: 0 0 0 3px rgba(22,216,228,.13), 0 22px 54px rgba(0,0,0,.45); }
+.cinematic-collection-art { position: relative; display: block; width: 100%; aspect-ratio: 16 / 8.5; overflow: hidden; background: #09131d; }
+.cinematic-collection-art > img { width: 100%; height: 100%; object-fit: cover; }
+.cinematic-collection-copy { display: block; padding: 17px 18px 18px; text-align: left; }
+.cinematic-collection-copy strong { display: block; overflow: hidden; font-size: 18px; text-overflow: ellipsis; white-space: nowrap; }
+.cinematic-collection-copy small { display: block; margin-top: 5px; color: #8295a7; font-size: 12px; }
+.cinematic-search-field { display: flex; width: min(920px, 100%); height: 64px; align-items: center; gap: 13px; margin-bottom: 32px; padding: 0 19px; border: 1px solid rgba(146,174,193,.28); border-radius: 12px; background: rgba(13,25,35,.82); box-shadow: 0 16px 38px rgba(0,0,0,.16); }
+.cinematic-search-field:focus-within { border-color: var(--cyan); box-shadow: 0 0 0 4px rgba(22,216,228,.1), 0 18px 42px rgba(0,0,0,.3); }
+.cinematic-search-field > span { color: var(--cyan); font-size: 28px; }
+.cinematic-search-field input { width: 100%; height: 100%; padding: 0; border: 0; color: var(--white); background: transparent; font-size: 19px; user-select: text; }
+.cinematic-search-field input::placeholder { color: #6e8192; }
+.cinematic-search-tools { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 24px; color: #8295a7; font-size: 13px; }
+.cinematic-filter-chips { display: flex; flex-wrap: wrap; gap: 9px; }
+.cinematic-filter-chip { display: inline-flex; min-height: 38px; align-items: center; gap: 9px; padding: 0 15px; border: 1px solid rgba(146,174,193,.24); border-radius: 999px; color: #a9bac7; background: rgba(10,21,30,.68); font-size: 13px; font-weight: 680; }
+.cinematic-filter-chip span { display: grid; min-width: 22px; height: 22px; place-items: center; padding: 0 6px; border-radius: 999px; color: #718697; background: rgba(151,177,194,.09); font-size: 10px; }
+.cinematic-filter-chip:hover, .cinematic-filter-chip:focus-visible { border-color: rgba(22,216,228,.58); color: var(--white); }
+.cinematic-filter-chip.active { border-color: var(--cyan); color: #051014; background: var(--cyan); box-shadow: 0 8px 24px rgba(22,216,228,.16); }
+.cinematic-filter-chip.active span { color: #061116; background: rgba(3,12,16,.15); }
+.cinematic-result-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 20px; }
+.cinematic-result-grid .cinematic-card { width: 100%; min-width: 0; }
+.cinematic-search-hint { padding: 38px 0; color: #718195; font-size: 15px; }
+.cinematic-settings-page .settings-page { height: auto; overflow: visible; padding: 30px 54px 72px; background: transparent; }
+.cinematic-settings-page .settings-heading, .cinematic-settings-page .settings-grid, .cinematic-settings-page .settings-footer { width: min(1280px, 100%); margin-inline: auto; }
+.cinematic-settings-page .settings-heading { margin-bottom: 12px; }
+.cinematic-settings-page .settings-card { border-color: rgba(113,151,174,.19); background: linear-gradient(145deg, rgba(18,31,43,.86), rgba(9,17,25,.9)); box-shadow: 0 18px 46px rgba(0,0,0,.16); backdrop-filter: blur(14px); }
+.cinematic-settings-page .settings-card:hover { border-color: rgba(22,216,228,.2); }
+.cinematic-settings-page .page-heading { font-size: clamp(44px, 4vw, 66px); font-weight: 540; }
+.cinematic-person-page .person-ambient { inset: 0; }
+.cinematic-person-page .person-hero { padding-top: 40px; }
+.cinematic-person-page .person-library { padding-bottom: 40px; }
+.cinematic-collection-detail-page .cinematic-result-grid { padding-bottom: 20px; }
 body.fullscreen .cinematic-sidebar { inset-block-start: 0; }
 body.fullscreen .cinematic-main, body.fullscreen .cinematic-hero-bg { inset-block-start: 0; }
 
@@ -364,6 +409,8 @@ body.fullscreen .cinematic-main, body.fullscreen .cinematic-hero-bg { inset-bloc
   .cinematic-hero-copy { width: min(680px, 63vw); }
   .cinematic-detail-copy { width: min(720px, 66vw); padding-left: 34px; }
   .cinematic-season-tabs { margin-inline: 10px; padding-inline: 24px; }
+  .cinematic-utility-content, .cinematic-settings-page .settings-page { padding-inline: 34px; }
+  .cinematic-collection-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 .person-page { position: relative; height: 100%; overflow-y: auto; background: var(--night); scrollbar-width: none; }

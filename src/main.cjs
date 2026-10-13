@@ -854,8 +854,17 @@ function createWindow() {
       if (captureView === 'grid-click') {
         await mainWindow.webContents.executeJavaScript("document.querySelector('[data-action=\"layout\"]')?.click()");
         await new Promise((resolve) => setTimeout(resolve, 250));
-      } else if (captureView === 'home' || captureView === 'movies' || captureView === 'series') {
+      } else if (captureView === 'home' || captureView === 'movies' || captureView === 'series' || captureView === 'watchlist') {
         await mainWindow.webContents.executeJavaScript("document.querySelector('.cinematic-rows .cinematic-card')?.focus()");
+        await new Promise((resolve) => setTimeout(resolve, 180));
+      } else if (captureView === 'collections') {
+        await mainWindow.webContents.executeJavaScript("document.querySelector('.cinematic-collection-card')?.focus()");
+        await new Promise((resolve) => setTimeout(resolve, 180));
+      } else if (captureView === 'search') {
+        await mainWindow.webContents.executeJavaScript("document.querySelector('#search-results .cinematic-card')?.focus()");
+        await new Promise((resolve) => setTimeout(resolve, 180));
+      } else if (captureView === 'collection-detail') {
+        await mainWindow.webContents.executeJavaScript("document.querySelector('.cinematic-collection-detail-page .cinematic-card')?.focus()");
         await new Promise((resolve) => setTimeout(resolve, 180));
       } else if (captureView === 'plex-signin-waiting') {
         await mainWindow.webContents.executeJavaScript("window.__showPlexSignInPreview?.('waiting')");
