@@ -392,14 +392,9 @@ function homeShelves() {
     && comparisonRows.every((items) => recommendationOverlap(favoriteItems, items) < .8)
     ? { ...favoriteRow, items: favoriteItems }
     : null;
-  const topRatedItems = allocate(topRated(library));
-  const topRatedKeys = new Set(topRatedItems.map((item) => item.ratingKey));
-  const hiddenPool = hiddenGems(library);
-  const hiddenPriority = [
-    ...hiddenPool.filter((item) => !topRatedKeys.has(item.ratingKey)),
-    ...hiddenPool.filter((item) => topRatedKeys.has(item.ratingKey)),
-  ];
-  const hiddenGemItems = allocate(hiddenPriority);
+  const hiddenGemItems = allocate(hiddenGems(library));
+  const hiddenGemKeys = new Set(hiddenGemItems.map((item) => item.ratingKey));
+  const topRatedItems = allocate(topRated(library).filter((item) => !hiddenGemKeys.has(item.ratingKey)));
   const recentlyAddedItems = allocate(recentlyAdded);
   return [
     shelf('Continue Watching', continueWatching, true),
@@ -545,7 +540,9 @@ function cinematicHomePage() {
   const becauseKeys = new Set((becauseRow?.items || []).map((item) => item.ratingKey));
   const recommended = uniqueTitles(topPicks(library)).filter((item) => !becauseKeys.has(item.ratingKey)).slice(0, 24);
   const newReleases = uniqueTitles(newestReleases(library)).slice(0, 24);
-  const rated = uniqueTitles(topRated(library)).slice(0, 24);
+  const gems = uniqueTitles(hiddenGems(library)).slice(0, 24);
+  const gemKeys = new Set(gems.map((item) => item.ratingKey));
+  const rated = uniqueTitles(topRated(library)).filter((item) => !gemKeys.has(item.ratingKey)).slice(0, 24);
   const selected = library.find((item) => item.ratingKey === state.cinematicHeroKey)
     || recommended.find((item) => item.kind === 'movie')
     || recommended[0]
@@ -575,7 +572,7 @@ function cinematicHomePage() {
           ${becauseRow ? cinematicShelf(becauseRow.title, becauseRow.items, { portrait: true }) : ''}
           ${cinematicShelf('New Releases', newReleases, { portrait: true })}
           ${cinematicShelf('Top Rated', rated, { portrait: true })}
-          ${cinematicShelf('Hidden Gems', uniqueTitles(hiddenGems(library)).slice(0, 24), { portrait: true })}
+          ${cinematicShelf('Hidden Gems', gems, { portrait: true })}
           ${cinematicShelf('Recently Added', uniqueTitles([...library].sort((left, right) => Number(right.addedAt || 0) - Number(left.addedAt || 0))).slice(0, 24), { portrait: true })}
           ${cinematicShelf('Watch Again', uniqueTitles(watchAgain(library)).slice(0, 24), { portrait: true })}
           ${cinematicShelf('From Your Watchlist', uniqueTitles(watchlist), { portrait: true })}
@@ -1876,6 +1873,10 @@ window.__runMinovaQa = async function runMinovaQa() {
   check('Home returns focus to selected header tab', document.activeElement?.dataset?.tab === 'home', activeLabel());
   check('Home uses the same cinematic hero as Movies and TV Shows', Boolean(document.querySelector('.cinematic-home-page .cinematic-hero')) && Boolean(document.querySelector('.cinematic-home-page .cinematic-sidebar')), document.querySelector('.cinematic-home-page') ? 'cinematic' : 'missing');
   const homeTitles = [...document.querySelectorAll('.home-shelves .section-title')].map((title) => title.textContent);
+  const homeActions = document.querySelector('.cinematic-home-page .cinematic-hero .actions');
+  const continueHeading = document.querySelector('.home-shelves .cinematic-section-heading-copy');
+  const heroShelfGap = (continueHeading?.getBoundingClientRect().top || 0) - (homeActions?.getBoundingClientRect().bottom || 0);
+  check('Home leaves breathing room between Play and Continue Watching', Boolean(homeActions && continueHeading) && heroShelfGap >= 24 && heroShelfGap <= 90, heroShelfGap);
   check('Home provides discovery and personalized shelves', homeTitles.includes('New Releases') && homeTitles.includes('Top Picks for You') && homeTitles.some((title) => title.startsWith('Because you watched ')), homeTitles.join(', '));
   const becauseSections = [...document.querySelectorAll('.home-shelves .section')].filter((section) => section.querySelector('.section-title')?.textContent.startsWith('Because you watched '));
   const becauseAnchorTitle = becauseSections[0]?.querySelector('.section-title')?.textContent.replace('Because you watched ', '');
@@ -1887,6 +1888,12 @@ window.__runMinovaQa = async function runMinovaQa() {
   const becauseKeys = [...becauseSections[0].querySelectorAll('.media-card')].map((cardNode) => cardNode.dataset.key);
   const personalOverlap = becauseKeys.filter((key) => topPickKeys.has(key));
   check('Top Picks and Because you watched contain no duplicate titles', personalOverlap.length === 0, personalOverlap.join(',') || 'zero overlap');
+  const topRatedSection = [...document.querySelectorAll('.home-shelves .section')].find((section) => section.querySelector('.section-title')?.textContent === 'Top Rated');
+  const hiddenGemsSection = [...document.querySelectorAll('.home-shelves .section')].find((section) => section.querySelector('.section-title')?.textContent === 'Hidden Gems');
+  const topRatedKeys = new Set([...(topRatedSection?.querySelectorAll('.media-card') || [])].map((cardNode) => cardNode.dataset.key));
+  const hiddenGemKeys = [...(hiddenGemsSection?.querySelectorAll('.media-card') || [])].map((cardNode) => cardNode.dataset.key);
+  const ratedOverlap = hiddenGemKeys.filter((key) => topRatedKeys.has(key));
+  check('Top Rated and Hidden Gems contain no duplicate titles', Boolean(topRatedSection && hiddenGemsSection) && ratedOverlap.length === 0, ratedOverlap.join(',') || 'zero overlap');
   check('Home offers several distinct recommendation types', homeTitles.includes('Top Rated') && homeTitles.includes('Hidden Gems') && homeTitles.includes('Watch Again') && homeTitles.length >= 7, homeTitles.join(', '));
   check('Home does not duplicate Movies or Series library lists', !homeTitles.includes('Movies') && !homeTitles.includes('Series'), homeTitles.join(', '));
   const posterSections = [...document.querySelectorAll('.home-shelves .cinematic-poster-section')];
@@ -1897,6 +1904,9 @@ window.__runMinovaQa = async function runMinovaQa() {
   const firstPosterCard = firstPosterSection?.querySelector('.cinematic-poster-card');
   check('Shelf headings and cards use one horizontal gutter', Boolean(firstPosterHeading && firstPosterCard) && Math.abs(firstPosterHeading.getBoundingClientRect().left - firstPosterCard.getBoundingClientRect().left) < 2, `${firstPosterHeading?.getBoundingClientRect().left}:${firstPosterCard?.getBoundingClientRect().left}`);
   const firstPosterRail = firstPosterSection?.querySelector('.rail');
+  const nextPosterHeading = posterSections[1]?.querySelector('.cinematic-section-heading-copy');
+  const portraitShelfGap = (nextPosterHeading?.getBoundingClientRect().top || 0) - (firstPosterCard?.getBoundingClientRect().bottom || 0);
+  check('Portrait shelves keep a compact vertical rhythm', Boolean(nextPosterHeading && firstPosterCard) && portraitShelfGap >= 12 && portraitShelfGap <= 40, `${portraitShelfGap}; card=${firstPosterCard?.getBoundingClientRect().height}; rail=${firstPosterRail?.getBoundingClientRect().height}`);
   if (firstPosterRail) firstPosterRail.scrollLeft = 0;
   firstPosterCard?.focus(); await wait(420);
   check('Focusing the first poster does not introduce a rail offset', Number(firstPosterRail?.scrollLeft || 0) < 2, firstPosterRail?.scrollLeft || 0);
@@ -1988,6 +1998,13 @@ window.__runMinovaQa = async function runMinovaQa() {
   check('Resume resolves the in-progress episode using Android logic', seriesPrimary?.dataset?.key === 'demo-6-season-1-episode-2', seriesPrimary?.dataset?.key || 'missing');
   check('Series Cast & Crew includes actor pictures', Boolean(document.querySelector('.cast-section .credit-avatar img')), document.querySelectorAll('.cast-section .credit-avatar img').length);
   check('TV episodes keep landscape playback cards', Boolean(document.querySelector('.cinematic-series-content .cinematic-episode-card.landscape')), document.querySelector('.cinematic-series-content .cinematic-episode-card')?.className || 'missing');
+  const seriesLeftEdges = [
+    document.querySelector('.cinematic-series-detail .cinematic-detail-copy h1'),
+    document.querySelector('.cinematic-season-tabs'),
+    document.querySelector('.cinematic-episode-copy h2'),
+    document.querySelector('.cinematic-series-content .cinematic-episode-card'),
+  ].map((node) => node?.getBoundingClientRect().left).filter(Number.isFinite);
+  check('Series title, seasons, episode copy, and episode rail share one left edge', seriesLeftEdges.length === 4 && Math.max(...seriesLeftEdges) - Math.min(...seriesLeftEdges) < 2, seriesLeftEdges.join(','));
   check('Show and episode content keeps avatar cast below the episodes', Boolean(document.querySelector('.cinematic-series-content + .cast-section .credit-avatar')), document.querySelector('.cast-section')?.textContent.trim() || 'missing');
   await press('Backspace');
   document.querySelector('.rail .media-card[data-key="demo-7"]')?.click(); await wait(260);

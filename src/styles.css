@@ -299,6 +299,7 @@ body.fullscreen .content, body.fullscreen .detail-bg { inset-block-start: 0; }
 .cinematic-actions .primary { box-shadow: 0 10px 28px rgba(22,216,228,.2); }
 .cinematic-actions .secondary { border: 1px solid rgba(151,177,194,.46); background: rgba(8,18,26,.58); backdrop-filter: blur(12px); }
 .cinematic-rows { position: relative; z-index: 4; margin-top: -56px; padding: 0 0 76px; background: linear-gradient(transparent, #050a0f 104px); }
+.cinematic-home-page .cinematic-rows { margin-top: -12px; }
 .cinematic-section { margin-top: 24px; }
 .cinematic-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 0 var(--cinema-gutter) 10px; }
 .cinematic-section-heading-copy { display: flex; align-items: baseline; gap: 12px; }
@@ -316,7 +317,7 @@ body.fullscreen .content, body.fullscreen .detail-bg { inset-block-start: 0; }
 .cinematic-card-title { position: absolute; z-index: 2; right: 14px; bottom: 16px; left: 14px; overflow: hidden; color: #f7fafc; font-size: 15px; font-weight: 680; letter-spacing: .08em; text-align: left; text-overflow: ellipsis; text-shadow: 0 2px 8px #000; text-transform: uppercase; white-space: nowrap; }
 .cinematic-card .progress { right: 12px; bottom: 7px; left: 12px; height: 4px; overflow: hidden; border-radius: 3px; background: rgba(151,177,194,.32); }
 .cinematic-card img { filter: saturate(.9) contrast(1.04); }
-.cinematic-poster-card.media-card { display: flex; flex: 0 0 clamp(150px, 12.2vw, 196px); aspect-ratio: auto; align-self: flex-start; flex-direction: column; overflow: visible; border: 0; border-radius: 10px; background: transparent; box-shadow: none; text-align: left; }
+.cinematic-poster-card.media-card { display: flex; height: auto; min-height: 0; flex: 0 0 clamp(150px, 12.2vw, 196px); aspect-ratio: auto; align-self: flex-start; flex-direction: column; overflow: visible; border: 0; border-radius: 10px; background: transparent; box-shadow: none; text-align: left; }
 .cinematic-poster-card.media-card::after { display: none; }
 .cinematic-poster-card.media-card:hover { border-color: transparent; transform: translateY(-2px); }
 .cinematic-poster-card.media-card:focus-visible { border: 0; outline: none; transform: translateY(-3px) scale(1.018); box-shadow: none; }
@@ -329,7 +330,8 @@ body.fullscreen .content, body.fullscreen .detail-bg { inset-block-start: 0; }
 .cinematic-poster-copy small { display: block; margin-top: 4px; overflow: hidden; color: #718497; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .cinematic-poster-card .badge { top: 8px; right: 8px; }
 .cinematic-poster-card .progress { right: 8px; bottom: 8px; left: 8px; }
-.cinematic-poster-section .rail { gap: 18px; padding-bottom: 34px; }
+.cinematic-poster-section { margin-top: 12px; }
+.cinematic-poster-section .rail { align-items: flex-start; gap: 18px; padding-bottom: 14px; }
 
 .cinematic-detail-page .cinematic-hero-bg { height: min(720px, 78vh); }
 .cinematic-detail-page .cinematic-detail-scroll { padding-bottom: 70px; }
