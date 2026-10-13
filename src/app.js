@@ -553,8 +553,8 @@ function cinematicHomePage() {
     ${cinematicSidebar('home')}
     <main class="cinematic-main">
       <div id="cinematic-hero-bg" class="cinematic-hero-bg">${background ? `<img src="${art(background)}" alt="" aria-hidden="true">` : '<span class="cinematic-hero-fallback" aria-hidden="true"></span>'}</div>
-      ${cinematicBrandHeader()}
       <div class="cinematic-scroll">
+        ${cinematicBrandHeader()}
         <section class="cinematic-hero">
           <div class="cinematic-subnav" aria-label="Cinema navigation"><button data-action="tab" data-tab="home" class="active">Recommended</button><button data-action="tab" data-tab="movies">Movies</button><button data-action="tab" data-tab="series">TV Shows</button></div>
           <div class="cinematic-hero-copy">
@@ -586,8 +586,7 @@ function cinematicUtilityShell(active, className, body, { back = false } = {}) {
     ${cinematicSidebar(active)}
     <main class="cinematic-main">
       <div class="cinematic-utility-ambient" aria-hidden="true"></div>
-      ${cinematicBrandHeader({ back })}
-      <div class="cinematic-utility-scroll">${body}</div>
+      <div class="cinematic-utility-scroll">${cinematicBrandHeader({ back })}${body}</div>
     </main>
   </div>`;
 }
@@ -606,8 +605,8 @@ function cinematicWatchlistPage() {
     ${cinematicSidebar('watchlist')}
     <main class="cinematic-main">
       <div id="cinematic-hero-bg" class="cinematic-hero-bg">${background ? `<img src="${art(background)}" alt="" aria-hidden="true">` : '<span class="cinematic-hero-fallback" aria-hidden="true"></span>'}</div>
-      ${cinematicBrandHeader()}
       <div class="cinematic-scroll">
+        ${cinematicBrandHeader()}
         <section class="cinematic-hero">
           <div class="cinematic-hero-copy">
             <span class="cinematic-kicker">Saved for later</span>
@@ -719,8 +718,8 @@ function cinematicLibraryPage(items, kind) {
     ${cinematicSidebar(kind)}
     <main class="cinematic-main">
       <div id="cinematic-hero-bg" class="cinematic-hero-bg">${background ? `<img src="${art(background)}" alt="" aria-hidden="true">` : '<span class="cinematic-hero-fallback" aria-hidden="true"></span>'}</div>
-      ${cinematicBrandHeader()}
       <div class="cinematic-scroll">
+        ${cinematicBrandHeader()}
         <section class="cinematic-hero">
           <div class="cinematic-subnav" aria-label="Cinema library"><button data-action="tab" data-tab="movies" class="${isSeries ? '' : 'active'}">Movies</button><button data-action="tab" data-tab="series" class="${isSeries ? 'active' : ''}">TV Shows</button></div>
           <div class="cinematic-hero-copy">
@@ -789,7 +788,7 @@ function settingsPage() {
   const serverLabel = state.config.server || 'Visual demo';
   const connectionLabel = state.config.demoMode ? 'Demo mode' : 'Connected';
   const securityLabel = state.config.demoMode ? 'Preview catalog' : 'Windows encrypted';
-  return `<div class="screen cinematic-page cinematic-utility-page cinematic-settings-page">${cinematicSidebar('settings')}<main class="cinematic-main"><div class="cinematic-utility-ambient" aria-hidden="true"></div>${cinematicBrandHeader()}<div class="cinematic-utility-scroll"><div class="settings-page">
+  return `<div class="screen cinematic-page cinematic-utility-page cinematic-settings-page">${cinematicSidebar('settings')}<main class="cinematic-main"><div class="cinematic-utility-ambient" aria-hidden="true"></div><div class="cinematic-utility-scroll">${cinematicBrandHeader()}<div class="settings-page">
     <div class="settings-heading"><div><span class="cinematic-kicker">Make it yours</span><h1 class="page-heading">Settings</h1><p class="page-subheading">Playback, connection, updates, and desktop controls</p></div><div class="settings-status"><span class="status-dot"></span>${connectionLabel}<small>${securityLabel}</small></div></div>
     <div class="settings-grid">
       <section class="settings-card playback-card"><div class="settings-card-head"><span class="settings-icon">▶</span><div><span class="settings-kicker">Native playback</span><h2>libmpv picture</h2></div></div>
@@ -849,8 +848,8 @@ function detailPage(item, children = [], seriesPlayback = null) {
     ${cinematicSidebar(isSeries ? 'series' : 'movies')}
     <main class="cinematic-main">
       <div class="detail-bg cinematic-hero-bg">${bg ? `<img src="${art(bg)}" alt="" aria-hidden="true">` : '<span class="cinematic-hero-fallback" aria-hidden="true"></span>'}</div>
-      ${cinematicBrandHeader({ back: true })}
       <div class="cinematic-detail-scroll">
+        ${cinematicBrandHeader({ back: true })}
         <section class="detail-copy cinematic-detail-copy">
           ${isSeries ? '<div class="cinematic-subnav detail-subnav"><button data-action="tab" data-tab="movies">Movies</button><button data-action="tab" data-tab="series" class="active">TV Shows</button></div>' : ''}
           <span class="cinematic-kicker">${esc(isSeries ? 'TV series' : 'Feature presentation')}</span>
@@ -879,7 +878,7 @@ function detailPage(item, children = [], seriesPlayback = null) {
 function personPage(profile) {
   const media = profile?.media || [];
   return `<div class="screen cinematic-page person-page cinematic-person-page">${cinematicSidebar(state.tab)}<main class="cinematic-main">
-    <div class="person-ambient"></div>${cinematicBrandHeader({ back: true })}<div class="cinematic-utility-scroll">
+    <div class="person-ambient"></div><div class="cinematic-utility-scroll">${cinematicBrandHeader({ back: true })}
     <section class="person-hero">
       <div class="person-portrait">${profile?.imagePath ? `<img src="${art(profile.imagePath)}" alt="${esc(profile.name)}">` : `<span>${esc(profile?.name?.[0]?.toUpperCase() || '?')}</span>`}</div>
       <div class="person-copy">
@@ -1851,7 +1850,7 @@ window.__runMinovaQa = async function runMinovaQa() {
   const detailScroller = document.querySelector('.cinematic-detail-scroll');
   const detailBrandTop = document.querySelector('.cinematic-brand-header')?.getBoundingClientRect().top;
   detailScroller.scrollTop = 220; await wait(80);
-  check('Detail wordmark stays fixed while the overview scrolls', Math.abs((document.querySelector('.cinematic-brand-header')?.getBoundingClientRect().top || 0) - detailBrandTop) < 1, `${detailBrandTop}:${document.querySelector('.cinematic-brand-header')?.getBoundingClientRect().top}`);
+  check('Detail wordmark scrolls away instead of covering overview content', (document.querySelector('.cinematic-brand-header')?.getBoundingClientRect().top || 0) < detailBrandTop - 150, `${detailBrandTop}:${document.querySelector('.cinematic-brand-header')?.getBoundingClientRect().top}`);
   detailScroller.scrollTop = 0; await wait(40);
   document.querySelector('.cinematic-credit[data-action="person"]')?.click(); await wait(180);
   check('Cast card opens a Minova actor profile', state.route.type === 'person' && Boolean(document.querySelector('.person-page .person-biography')), state.route.type);
@@ -1921,7 +1920,7 @@ window.__runMinovaQa = async function runMinovaQa() {
   homePage.scrollTop = 0;
   wheelRail?.dispatchEvent(new WheelEvent('wheel', { deltaY: 260, bubbles: true, cancelable: true })); await wait(100);
   check('Mouse wheel scrolls the page vertically without moving the shelf', homePage.scrollTop > 0 && Number(wheelRail?.scrollLeft || 0) === railBeforeWheel, `page=${homePage.scrollTop}; rail=${wheelRail?.scrollLeft || 0}`);
-  check('Minova wordmark stays pinned while content scrolls', Math.abs((document.querySelector('.cinematic-brand-header')?.getBoundingClientRect().top || 0) - brandTopBeforeScroll) < 1, `${brandTopBeforeScroll}:${document.querySelector('.cinematic-brand-header')?.getBoundingClientRect().top}`);
+  check('Minova wordmark remains at the page top and scrolls out of view', (document.querySelector('.cinematic-brand-header')?.getBoundingClientRect().top || 0) < brandTopBeforeScroll - 100, `${brandTopBeforeScroll}:${document.querySelector('.cinematic-brand-header')?.getBoundingClientRect().top}`);
   scrollableSection?.querySelector('.rail-arrow-right')?.click(); await wait(460);
   check('Shelf left arrow appears after moving right', Number(scrollableSection?.querySelector('.rail')?.scrollLeft) > 6 && !scrollableSection?.querySelector('.rail-arrow-left')?.classList.contains('is-hidden'), scrollableSection?.querySelector('.rail')?.scrollLeft || 0);
   recordLocalViewingSignal({ kind: 'movie', ratingKey: 'demo-1' }); render(); await wait(120);
