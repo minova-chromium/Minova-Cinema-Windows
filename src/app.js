@@ -456,6 +456,10 @@ function cinematicAlphabeticalLibrary(items) {
   const letters = [...groups.keys()].sort((left, right) => left === '#' ? 1 : right === '#' ? -1 : left.localeCompare(right));
   const index = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((letter) => `<button type="button" data-action="alpha-jump" data-letter="${letter}" ${groups.has(letter) ? '' : 'disabled'} aria-label="Jump to ${letter}">${letter}</button>`).join('');
   if (!letters.length) return `<div class="cinematic-empty"><strong>No titles in this genre</strong><span>Choose another genre to see more of your library.</span></div>`;
+  if (!state.config.splitAlphabetical) {
+    const cards = letters.flatMap((letter) => groups.get(letter).map((item, index) => cinematicCard(item, { portrait: true, alpha: index === 0 ? letter : null }))).join('');
+    return `<div class="alphabetical-layout cinematic-alphabetical-layout cinematic-continuous-layout"><div class="grid cinematic-poster-grid cinematic-continuous-grid">${cards}</div><aside class="alpha-index cinematic-alpha-index" aria-label="Alphabetical jump">${index}</aside></div>`;
+  }
   return `<div class="alphabetical-layout cinematic-alphabetical-layout"><div class="alphabetical-groups cinematic-alphabetical-groups">${letters.map((letter) => {
     const group = groups.get(letter);
     return `<section class="alpha-group cinematic-alpha-group" data-alpha-group="${letter}"><div class="alpha-heading cinematic-alpha-heading"><h2>${letter}</h2><span>${group.length} ${group.length === 1 ? 'title' : 'titles'}</span></div><div class="grid cinematic-poster-grid">${group.map((item) => cinematicCard(item, { portrait: true })).join('')}</div></section>`;
@@ -519,7 +523,7 @@ function cinematicBrandHeader({ back = false } = {}) {
   </div>`;
 }
 
-function cinematicCard(item, { episode = false, portrait = false } = {}) {
+function cinematicCard(item, { episode = false, portrait = false, alpha = null } = {}) {
   const isEpisode = episode || item.kind === 'episode';
   const imagePath = portrait ? item.posterPath || item.backdropPath : item.backdropPath || item.posterPath;
   const [seriesTitle = '', episodeCodeFromMetadata = ''] = String(item.secondaryTitle || '').split(/\s*•\s*/);
@@ -529,7 +533,7 @@ function cinematicCard(item, { episode = false, portrait = false } = {}) {
   if (portrait) {
     const type = item.kind === 'show' ? 'TV Show' : 'Movie';
     const details = [item.year, type].filter(Boolean).join(' · ');
-    return `<button class="media-card cinematic-card cinematic-poster-card" data-action="open" data-key="${esc(item.ratingKey)}" data-focus-key="${esc(item.ratingKey)}" aria-label="Open ${esc(item.title)}">
+    return `<button class="media-card cinematic-card cinematic-poster-card" data-action="open" data-key="${esc(item.ratingKey)}" data-focus-key="${esc(item.ratingKey)}" ${alpha ? `data-alpha-start="${alpha}"` : ''} aria-label="Open ${esc(item.title)}">
       <span class="cinematic-poster-art">${imagePath ? `<img src="${art(imagePath)}" alt="" loading="lazy" decoding="async">` : '<span class="cinematic-card-fallback" aria-hidden="true"></span>'}${item.isWatched ? '<span class="badge">✓</span>' : ''}${item.progress > 0 && item.progress < .98 ? `<span class="progress"><span style="width:${Math.round(item.progress * 100)}%"></span></span>` : ''}</span>
       <span class="cinematic-poster-copy"><strong>${esc(item.title)}</strong><small>${esc(details)}</small></span>
     </button>`;
@@ -767,9 +771,10 @@ function cinematicFullLibraryPage(kind) {
   const genres = genresFor(items);
   const filteredCount = state.genre ? items.filter((item) => item.genres?.includes(state.genre)).length : items.length;
   const title = isSeries ? 'TV Shows' : 'Movies';
+  const organization = state.config.splitAlphabetical ? 'in separate A–Z sections' : 'in one continuous A–Z grid';
   return cinematicUtilityShell(kind, 'cinematic-full-library-page', `<section class="cinematic-utility-content cinematic-full-library-content">
     <div class="cinematic-full-library-toolbar">
-      <div class="cinematic-page-heading cinematic-library-page-heading"><span class="cinematic-kicker">Your complete Plex library</span><div class="cinematic-library-title-row"><h1>${title}</h1><span>Library</span></div><p>${filteredCount} ${filteredCount === 1 ? 'title' : 'titles'}${state.genre ? ` in ${esc(state.genre)}` : ''}, arranged from A to Z.</p></div>
+      <div class="cinematic-page-heading cinematic-library-page-heading"><span class="cinematic-kicker">Your complete Plex library</span><div class="cinematic-library-title-row"><h1>${title}</h1><span>Library</span></div><p>${filteredCount} ${filteredCount === 1 ? 'title' : 'titles'}${state.genre ? ` in ${esc(state.genre)}` : ''}, arranged ${organization}.</p></div>
       <label class="genre-filter cinematic-genre-filter"><span>Genre</span><select id="genre-filter" aria-label="Filter ${title} by genre"><option value="">All genres</option>${genres.map((genre) => `<option value="${esc(genre)}" ${state.genre === genre ? 'selected' : ''}>${esc(genre)}</option>`).join('')}</select></label>
     </div>
     ${cinematicAlphabeticalLibrary(items)}
@@ -845,6 +850,11 @@ function settingsPage() {
       <section class="settings-card window-card"><div class="settings-card-head"><span class="settings-icon">⛶</span><div><span class="settings-kicker">Display</span><h2>Window mode</h2></div></div>
         <p>Use the normal resizable window or switch to a distraction-free cinema view.</p>
         <button class="secondary settings-button" data-action="fullscreen">Toggle full screen <span class="button-hint">F11</span></button>
+      </section>
+      <section class="settings-card library-card"><div class="settings-card-head"><span class="settings-icon settings-icon-wide">A–Z</span><div><span class="settings-kicker">Library</span><h2>Grid organization</h2></div></div>
+        <p>Keep one compact alphabetical grid, or separate every letter into its own labeled section. Letter keys and the A–Z index work in both modes.</p>
+        <label class="field"><span>Alphabetical layout</span><select id="grid-organization"><option value="continuous" ${state.config.splitAlphabetical ? '' : 'selected'}>Continuous grid</option><option value="sections" ${state.config.splitAlphabetical ? 'selected' : ''}>Separate A–Z sections</option></select></label>
+        <button class="primary settings-button" data-action="save-browsing">Save browsing layout</button>
       </section>
       <section class="settings-card update-card"><div class="settings-card-head"><span class="settings-icon">↻</span><div><span class="settings-kicker">Application</span><h2>Automatic updates</h2></div></div>
         <p data-update-message>${esc(state.update?.message || 'Automatic update checks are enabled.')}</p>
@@ -1251,12 +1261,14 @@ function navigateDpad(key) {
     if (key === 'ArrowUp') {
       if (active.id === 'autoplay-next') return focusNode(document.getElementById('enhancement'));
       if (active.id === 'enhancement') return focusNode(document.getElementById('quality'));
+      if (active.id === 'grid-organization') return focusNode(document.querySelector('[data-action="fullscreen"]'));
       return focusHeaderFor(active);
     }
     if (key === 'ArrowDown') {
       if (active.id === 'quality') return focusNode(document.getElementById('enhancement'));
       if (active.id === 'enhancement') return focusNode(document.getElementById('autoplay-next'));
       if (active.id === 'genre-filter') return focusNode(document.querySelector('.grid .media-card, .rail .media-card'));
+      if (active.id === 'grid-organization') return focusNode(document.querySelector('[data-action="save-browsing"]'));
       return focusNode(document.querySelector('.settings-page button'));
     }
     if (key === 'ArrowLeft' || key === 'ArrowRight') {
@@ -1930,6 +1942,12 @@ window.__runMinovaQa = async function runMinovaQa() {
   check('Movies Library starts on its Back control', document.activeElement?.classList.contains('cinematic-back'), activeLabel());
   await press('ArrowDown');
   check('Down from Library Back reaches the genre selector', document.activeElement?.id === 'genre-filter', activeLabel());
+  const originalSplitAlphabetical = state.config.splitAlphabetical;
+  state.config.splitAlphabetical = false; render(); await wait(100);
+  check('Continuous mode keeps every title in one compact portrait grid', Boolean(document.querySelector('.cinematic-continuous-grid')) && !document.querySelector('.cinematic-alpha-group') && document.querySelectorAll('.cinematic-continuous-grid [data-alpha-start]').length > 0, `${Boolean(document.querySelector('.cinematic-continuous-grid'))}:${document.querySelectorAll('.cinematic-continuous-grid [data-alpha-start]').length}`);
+  state.config.splitAlphabetical = true; render(); await wait(100);
+  check('Separate mode creates labeled A–Z sections', document.querySelectorAll('.cinematic-alpha-group').length > 1 && !document.querySelector('.cinematic-continuous-grid'), document.querySelectorAll('.cinematic-alpha-group').length);
+  state.config.splitAlphabetical = originalSplitAlphabetical; render(); await wait(100);
   const movieLibraryCards = [...document.querySelectorAll('.cinematic-full-library-page .cinematic-poster-card')];
   check('Movies Library is a complete portrait grid', movieLibraryCards.length === state.catalog.movies.length && movieLibraryCards.every((cardNode) => findItem(cardNode.dataset.key)?.kind === 'movie'), `${movieLibraryCards.length}:${state.catalog.movies.length}`);
   check('Movies Library includes a right-side A–Z rail and genre selector', document.querySelectorAll('.cinematic-alpha-index button').length === 26 && Boolean(document.getElementById('genre-filter')), `${document.querySelectorAll('.cinematic-alpha-index button').length}:${Boolean(document.getElementById('genre-filter'))}`);
@@ -2190,7 +2208,7 @@ window.__runMinovaQa = async function runMinovaQa() {
 
   document.querySelector('[data-action="settings"]').click(); await wait(140);
   check('Settings receives focus on its header control', document.activeElement?.dataset?.action === 'settings', activeLabel());
-  check('Settings uses a focused five-card dashboard with automatic updates', document.querySelectorAll('.settings-grid .settings-card').length === 5 && Boolean(document.querySelector('[data-action="check-update"]')) && !document.getElementById('grid-organization'), document.querySelectorAll('.settings-grid .settings-card').length);
+  check('Settings uses a focused six-card dashboard with automatic updates and Library layout', document.querySelectorAll('.settings-grid .settings-card').length === 6 && Boolean(document.querySelector('[data-action="check-update"]')) && Boolean(document.getElementById('grid-organization')), document.querySelectorAll('.settings-grid .settings-card').length);
   check('Settings keeps the Minova cinematic shell', Boolean(document.querySelector('.cinematic-settings-page .cinematic-sidebar')) && !document.querySelector('.cinematic-settings-page .topbar'), document.querySelector('.cinematic-settings-page') ? 'cinematic' : 'missing');
   check('Settings dashboard uses two columns', getComputedStyle(document.querySelector('.settings-grid')).gridTemplateColumns.split(' ').length === 2, getComputedStyle(document.querySelector('.settings-grid')).gridTemplateColumns);
   const previousUpdate = state.update;
@@ -2218,7 +2236,10 @@ window.__runMinovaQa = async function runMinovaQa() {
   const previousSync = state.catalogSyncedAt;
   document.activeElement?.click(); await wait(180);
   check('Sync Plex now refreshes the catalog', state.catalogSyncedAt > previousSync, state.catalogSyncedAt);
-  check('Legacy grid controls are absent from the unified cinematic settings', !document.querySelector('[data-action="save-browsing"], #grid-organization'), document.querySelector('.settings-grid')?.textContent.trim() || 'missing');
+  const gridOrganization = document.getElementById('grid-organization');
+  check('Library settings offer Continuous grid and Separate A–Z sections', Boolean(gridOrganization) && [...gridOrganization.options].map((option) => option.value).join(',') === 'continuous,sections' && Boolean(document.querySelector('[data-action="save-browsing"]')), [...(gridOrganization?.options || [])].map((option) => option.textContent).join(', ') || 'missing');
+  gridOrganization?.focus(); await press('ArrowDown');
+  check('Down from alphabetical layout reaches Save browsing layout', document.activeElement?.dataset?.action === 'save-browsing', activeLabel());
 
   const failed = results.filter((result) => !result.passed);
   return { passed: failed.length === 0, total: results.length, failed: failed.length, results };
