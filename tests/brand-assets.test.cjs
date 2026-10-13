@@ -37,3 +37,12 @@ test('Windows icon contains the generated multi-size Minova symbol', () => {
   assert.equal(icon.readUInt16LE(4), 9);
   assert.ok(icon.length > 10_000);
 });
+
+test('custom installer embeds the real Minova PNG instead of converting the ICO', () => {
+  const builder = fs.readFileSync(path.join(root, 'scripts', 'Build-CustomInstaller.ps1'), 'utf8');
+  const bootstrapper = fs.readFileSync(path.join(root, 'installer', 'MinovaCinemaBootstrapper.cs'), 'utf8');
+
+  assert.match(builder, /assets\\minova-symbol-color\.png/);
+  assert.doesNotMatch(builder, /ToBitmap\(\)/);
+  assert.match(bootstrapper, /Image titleLogo = LoadLogo\(\)/);
+});

@@ -414,7 +414,9 @@ namespace Minova.Cinema.Bootstrapper
             bar.MouseLeftButtonDown += delegate { if (Mouse.LeftButton == MouseButtonState.Pressed) DragMove(); };
             StackPanel identity = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(18, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
             Border dot = new Border { Width = 24, Height = 24, CornerRadius = new CornerRadius(7), Background = new SolidColorBrush(Color.FromRgb(11, 35, 52)) };
-            dot.Child = Text("M", 14, Cyan, FontWeights.Bold, HorizontalAlignment.Center, VerticalAlignment.Center);
+            Image titleLogo = LoadLogo();
+            titleLogo.Width = 22; titleLogo.Height = 22;
+            dot.Child = titleLogo;
             identity.Children.Add(dot);
             TextBlock name = Text("MINOVA CINEMA SETUP", 11, Muted, FontWeights.Bold);
             name.Margin = new Thickness(10, 0, 0, 0);

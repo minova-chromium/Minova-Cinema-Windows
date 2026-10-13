@@ -63,8 +63,9 @@ $frameworkDirectory = Split-Path -Parent $compiler
 $wpfDirectory = Join-Path $frameworkDirectory 'WPF'
 $source = Join-Path $root 'installer\MinovaCinemaBootstrapper.cs'
 $sourceIcon = Join-Path $root 'assets\minova-cinema.ico'
+$sourceLogo = Join-Path $root 'assets\minova-symbol-color.png'
 
-foreach ($required in @($compiler, $source, $sourceIcon)) {
+foreach ($required in @($compiler, $source, $sourceIcon, $sourceLogo)) {
     if (-not (Test-Path -LiteralPath $required)) { throw "Required installer file is missing: $required" }
 }
 
@@ -91,14 +92,7 @@ using System.Reflection;
 [assembly: AssemblyInformationalVersion("$Version")]
 "@ | Set-Content -LiteralPath $assemblyInfo -Encoding UTF8
 
-Add-Type -AssemblyName System.Drawing
-$icon = New-Object System.Drawing.Icon($sourceIcon)
-try {
-    $bitmap = $icon.ToBitmap()
-    try { $bitmap.Save($logoPng, [Drawing.Imaging.ImageFormat]::Png) }
-    finally { $bitmap.Dispose() }
-}
-finally { $icon.Dispose() }
+Copy-Item -LiteralPath $sourceLogo -Destination $logoPng -Force
 Copy-Item -LiteralPath $sourceIcon -Destination $wrapperIcon -Force
 
 $references = @(
