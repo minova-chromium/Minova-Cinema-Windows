@@ -232,7 +232,7 @@ function demoCatalog() {
     lastViewedAt: options.lastViewedAt || null, audienceRating: 6.6 + (id % 4) * .7,
     addedAt: 1790000000 - id * 84000, releaseDate: `${year}-${String((id % 9) + 1).padStart(2, '0')}-15`,
     credits: [
-      { name: 'Ava Stone', role: 'Lead cast', imagePath: 'asset:minova-symbol-color.svg', personId: 'demo-person-ava' },
+      { name: 'Ava Stone', role: 'Lead cast', imagePath: 'asset:minova-symbol-color.png', personId: 'demo-person-ava' },
       { name: 'Noah Vale', role: 'Cast', imagePath: 'asset:minova-cinema-wordmark.png', personId: 'demo-person-noah' },
       { name: 'Maya North', role: 'Director', imagePath: null, personId: 'demo-person-maya' },
     ],
@@ -317,7 +317,7 @@ function demoPerson(credit = {}) {
     personId: credit.personId || 'demo-person',
     name: credit.name || 'Ava Stone',
     role: credit.role || 'Actor',
-    imagePath: credit.imagePath || 'asset:minova-symbol-color.svg',
+    imagePath: credit.imagePath || 'asset:minova-symbol-color.png',
     biography: `${credit.name || 'Ava Stone'} is a performer whose work spans character-driven drama, thrillers, and cinematic adventure. This preview demonstrates the actor profile layout; connected Plex libraries use the matching person record and open reference data.`,
     sourceLabel: 'Profile preview',
     sourceUrl: null,

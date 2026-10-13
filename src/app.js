@@ -42,7 +42,7 @@ function base64Url(value) {
 
 function art(path) {
   const builtInAssets = {
-    'asset:minova-symbol-color.svg': '../assets/minova-symbol-color.svg',
+    'asset:minova-symbol-color.png': '../assets/minova-symbol-color.png',
     'asset:minova-cinema-wordmark.png': '../assets/minova-cinema-wordmark.png',
   };
   return builtInAssets[path] || (path ? `minova-plex://media/${base64Url(path)}` : '');
@@ -151,11 +151,11 @@ function refreshUpdateCard() {
 }
 
 function logoMarkup(size = 'full') {
-  return `<div class="brand-lockup ${size}"><img class="symbol" src="../assets/minova-symbol-color.svg" alt=""><span class="wordpair"><img src="../assets/minova-wordmark.png" alt="Minova"><img src="../assets/cinema-wordmark.png" alt="Cinema"></span></div>`;
+  return `<div class="brand-lockup ${size}"><img class="cinema-lockup" src="../assets/minova-cinema-wordmark.png" alt="Minova Cinema"></div>`;
 }
 
 function placeholderArt() {
-  return `<span class="placeholder-art"><img src="../assets/minova-symbol-color.svg" alt=""></span>`;
+  return `<span class="placeholder-art"><img src="../assets/minova-symbol-color.png" alt=""></span>`;
 }
 
 function card(item, { landscape = false, collection = false, alpha = null } = {}) {
@@ -516,7 +516,7 @@ function onboarding() {
 }
 
 function loading(message = 'Loading your cinema…') {
-  return `<div class="screen loading-screen"><div class="loader"><img src="../assets/minova-symbol-color.svg" alt=""><strong>${esc(message)}</strong><span>Connecting directly to Plex</span></div></div>`;
+  return `<div class="screen loading-screen"><div class="loader"><img src="../assets/minova-cinema-wordmark.png" alt="Minova Cinema"><strong>${esc(message)}</strong><span>Connecting directly to Plex</span></div></div>`;
 }
 
 function settingsPage() {
@@ -642,7 +642,7 @@ function collectionDetailPage(collection, members) {
 
 function playerPage(payload) {
   return `<div class="screen player-page native-player-page" aria-label="Native libmpv playback">
-    <div class="native-player-underlay"><img src="../assets/minova-symbol-color.svg" alt=""><span>Native libmpv playback</span></div>
+    <div class="native-player-underlay"><img src="../assets/minova-symbol-color.png" alt=""><span>Native libmpv playback</span></div>
   </div>`;
 }
 
