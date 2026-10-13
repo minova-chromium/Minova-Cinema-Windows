@@ -253,9 +253,21 @@ function demoCatalog() {
     make(7, 'After the Rain', 'show', 2025, 0, { genres: ['Drama', 'Mystery'] }),
     make(8, 'The Archive', 'show', 2024, 0, { genres: ['Drama', 'Mystery'] }),
   ];
+  const continueEpisodes = [
+    {
+      ...shows[0], ratingKey: 'demo-6-season-1-episode-2', title: 'Episode 2', secondaryTitle: 'Atlas Station  •  S1 E2', kind: 'episode',
+      parentRatingKey: 'demo-6-season-1', grandparentRatingKey: 'demo-6', seasonNumber: 1, episodeNumber: 2,
+      durationMs: 2700000, viewOffsetMs: 1134000, progress: .42, isWatched: false, viewedCount: 0, lastViewedAt: 1790699998,
+    },
+    {
+      ...shows[1], ratingKey: 'demo-7-season-1-episode-1', title: 'Episode 1', secondaryTitle: 'After the Rain  •  S1 E1', kind: 'episode',
+      parentRatingKey: 'demo-7-season-1', grandparentRatingKey: 'demo-7', seasonNumber: 1, episodeNumber: 1,
+      durationMs: 2700000, viewOffsetMs: 648000, progress: .24, isWatched: false, viewedCount: 0, lastViewedAt: 1790699997,
+    },
+  ];
   return {
     serverName: 'Minova Demo', movies, shows,
-    continueWatching: [make(9, 'City of Glass', 'movie', 2025, .34), make(10, 'Edge of Winter', 'movie', 2024, .72)],
+    continueWatching: [make(9, 'City of Glass', 'movie', 2025, .34), make(10, 'Edge of Winter', 'movie', 2024, .72), ...continueEpisodes],
     watchlist: [movies[1], shows[0]],
     collections: [
       { ratingKey: 'collection-1', title: 'Cinema Essentials', childCount: 5, libraryTitle: 'Movies' },
