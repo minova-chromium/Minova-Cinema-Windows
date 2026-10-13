@@ -11,6 +11,11 @@ test('native playback follows the audio clock without interpolation drift', () =
   assert.doesNotMatch(source, /\{ "tscale",/);
 });
 
+test('failed native startup closes the loading overlay before returning the error', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'main.cjs'), 'utf8');
+  assert.match(source, /try\s*\{\s*await nativePlayer\.start\(\);[\s\S]*?catch \(error\) \{\s*if \(nativePlayer === playbackPlayer\) await closeNativePlayback\(false\)/);
+});
+
 test('handoff pauses and commits the exact position without overwriting it on close', async () => {
   const commands = [];
   const timeline = [];

@@ -743,12 +743,17 @@ async function startNativePlayback(key, quality = 'original') {
       autoplayEnabled,
     }).catch(() => {});
   });
-  await nativePlayer.start();
-  syncPlayerOverlay();
-  return {
-    native: true, ratingKey: item.ratingKey, title: item.title, kind: item.kind,
-    grandparentRatingKey: item.grandparentRatingKey || null,
-  };
+  try {
+    await nativePlayer.start();
+    syncPlayerOverlay();
+    return {
+      native: true, ratingKey: item.ratingKey, title: item.title, kind: item.kind,
+      grandparentRatingKey: item.grandparentRatingKey || null,
+    };
+  } catch (error) {
+    if (nativePlayer === playbackPlayer) await closeNativePlayback(false).catch(() => {});
+    throw error;
+  }
 }
 
 async function closeNativePlayback(notifyRenderer, payload = { reason: 'closed' }) {
