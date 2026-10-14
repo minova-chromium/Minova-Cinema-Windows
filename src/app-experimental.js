@@ -261,21 +261,6 @@ function recommendationScore(candidate, anchor, preferredGenres = new Map(), gen
     + Math.min(10, Math.max(0, Number(candidate.year || 0) - 2016)) + Number(candidate.addedAt || 0) / 1e10;
 }
 
-function genreCounts(items) {
-  const counts = new Map();
-  for (const item of items) {
-    for (const genre of new Set(item.genres || [])) counts.set(genre, (counts.get(genre) || 0) + 1);
-  }
-  return counts;
-}
-
-function distinctiveAnchorGenres(anchor, items, counts = genreCounts(items)) {
-  const ordered = [...new Set(anchor?.genres || [])]
-    .sort((left, right) => (counts.get(left) || items.length) - (counts.get(right) || items.length));
-  const distinctive = ordered.filter((genre) => (counts.get(genre) || items.length) <= Math.max(4, Math.ceil(items.length * .45)));
-  return distinctive.length ? distinctive : ordered.slice(0, Math.min(2, ordered.length));
-}
-
 function watchedAnchors(items) {
   return [...items].filter((item) => viewingActivity(item) > 0)
     .sort((left, right) => viewingActivity(right) - viewingActivity(left));
@@ -291,25 +276,7 @@ function preferredGenreWeights(items) {
 }
 
 function recommendationRows(items, maximum = 2) {
-  const anchors = watchedAnchors(items);
-  const preferredGenres = preferredGenreWeights(items);
-  const counts = genreCounts(items);
-  const used = new Set();
-  const rows = [];
-  for (const anchor of anchors) {
-    const matchGenres = distinctiveAnchorGenres(anchor, items, counts);
-    const candidates = items.filter((candidate) => candidate.ratingKey !== anchor.ratingKey && !candidate.isWatched
-      && (candidate.genres || []).some((genre) => matchGenres.includes(genre)))
-      .sort((left, right) => recommendationScore(right, anchor, preferredGenres, counts, items.length)
-        - recommendationScore(left, anchor, preferredGenres, counts, items.length))
-      .filter((candidate) => !used.has(candidate.ratingKey));
-    if (candidates.length < 2) continue;
-    const selected = candidates.slice(0, 24);
-    selected.forEach((candidate) => used.add(candidate.ratingKey));
-    rows.push({ title: `Because you watched ${anchor.title}`, items: selected });
-    if (rows.length >= maximum) break;
-  }
-  return rows;
+  return window.MinovaRecommendations.buildBecauseRows(items, maximum);
 }
 
 function topPicks(items) {
