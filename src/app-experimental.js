@@ -860,7 +860,6 @@ function detailPage(item, children = [], seriesPlayback = null) {
   const creditButtons = (people) => people.slice(0, 8).map((person) => `<button class="cinematic-credit" data-action="person" data-person-id="${esc(person.personId || '')}" data-person-name="${esc(person.name)}" data-person-role="${esc(person.role)}" data-person-image="${esc(person.imagePath || '')}" ${person.personId ? '' : 'disabled'}>${esc(person.name)}</button>`).join('<span>•</span>');
   const episodes = isSeries ? (state.route.episodes || []) : [];
   const activeEpisode = episodes.find((episode) => episode.ratingKey === seriesPlayback?.episode?.ratingKey) || episodes[0] || seriesPlayback?.episode || null;
-  const seasonNumber = (season, index) => season.seasonNumber || String(season.title || '').match(/\d+/)?.[0] || index + 1;
   const castSection = item.credits?.length ? `<section class="detail-section cast-section cinematic-cast-access"><h2 class="section-title">Cast & Crew</h2><div class="rail">${item.credits.slice(0,30).map((person) => `<button class="credit-card" data-action="person" data-person-id="${esc(person.personId || '')}" data-person-name="${esc(person.name)}" data-person-role="${esc(person.role)}" data-person-image="${esc(person.imagePath || '')}" ${person.personId ? '' : 'disabled'} aria-label="Open ${esc(person.name)}, ${esc(person.role)}"><span class="credit-avatar">${person.imagePath ? `<img src="${art(person.imagePath)}" alt="${esc(person.name)}" loading="lazy">` : `<span class="credit-initial">${esc(person.name?.[0]?.toUpperCase() || '?')}</span>`}</span><strong>${esc(person.name)}</strong><span class="credit-role">${esc(person.role)}</span></button>`).join('')}</div></section>` : '';
   return `<div class="screen detail-page cinematic-page cinematic-detail-page ${isSeries ? 'cinematic-series-detail' : 'cinematic-movie-detail'}">
     ${cinematicSidebar(isSeries ? 'series' : 'movies')}
@@ -883,13 +882,43 @@ function detailPage(item, children = [], seriesPlayback = null) {
           ${!isSeries && (directors.length || cast.length) ? `<div class="cinematic-credits">${directors.length ? `<div><strong>Director</strong>${creditButtons(directors)}</div>` : ''}${cast.length ? `<div><strong>Cast</strong>${creditButtons(cast)}</div>` : ''}</div>` : ''}
         </section>
         ${isSeries ? `<section class="cinematic-series-content detail-section">
-          <div class="cinematic-season-tabs"><span class="cinematic-season-label">Season</span>${children.map((season, index) => `<button data-action="season" data-key="${esc(season.ratingKey)}" class="${(state.route.activeSeasonKey || children[0]?.ratingKey) === season.ratingKey ? 'active' : ''}" aria-label="Season ${esc(seasonNumber(season, index))}">${esc(seasonNumber(season, index))}</button>`).join('')}</div>
-          ${activeEpisode ? `<div class="cinematic-episode-copy"><h2><span id="cinematic-episode-number">${esc(activeEpisode.episodeNumber || '')}</span> <span id="cinematic-episode-title">${esc(activeEpisode.title)}</span></h2><p id="cinematic-episode-summary">${esc(activeEpisode.summary || item.summary || '')}</p></div>` : ''}
-          ${cinematicShelf('Episodes', episodes, { episode: true })}
+          ${cinematicSeasonPicker(item, children, state.route.activeSeasonKey || children[0]?.ratingKey)}
+          <div class="cinematic-season-panel" aria-live="polite">${cinematicSeasonEpisodes(item, episodes, seriesPlayback)}</div>
         </section>${castSection}` : `${castSection}<section class="detail-section cinematic-related">${cinematicShelf('More Like This', related, { portrait: true })}</section>`}
       </div>
     </main>
   </div>`;
+}
+
+function seasonNumber(season, index = 0) {
+  return season?.seasonNumber ?? String(season?.title || '').match(/\d+/)?.[0] ?? index + 1;
+}
+
+function seasonDisplayTitle(season, index = 0) {
+  const number = seasonNumber(season, index);
+  const title = String(season?.title || '').trim();
+  if (Number(number) === 0) return title || 'Specials';
+  return /^season\s+\d+$/i.test(title) || !title ? `Season ${number}` : title;
+}
+
+function cinematicSeasonPicker(show, seasons, activeKey) {
+  const cards = seasons.map((season, index) => {
+    const selected = season.ratingKey === activeKey;
+    const title = seasonDisplayTitle(season, index);
+    const imagePath = season.posterPath || show.posterPath || season.backdropPath || show.backdropPath;
+    const count = Number(season.childCount || 0);
+    return `<button class="cinematic-season-card${selected ? ' active' : ''}" type="button" role="tab" aria-selected="${selected}" aria-label="Open ${esc(title)}" data-action="season" data-key="${esc(season.ratingKey)}" data-season-title="${esc(title)}">
+      <span class="cinematic-season-art">${imagePath ? `<img src="${art(imagePath)}" alt="${esc(title)} poster" loading="lazy" decoding="async">` : '<span class="cinematic-card-fallback" aria-hidden="true"></span>'}${season.isWatched ? '<span class="badge">✓</span>' : ''}</span>
+      <span class="cinematic-season-copy"><strong>${esc(title)}</strong>${count ? `<small>${count} ${count === 1 ? 'episode' : 'episodes'}</small>` : ''}</span>
+    </button>`;
+  }).join('');
+  return `<div class="cinematic-season-tabs"><div class="cinematic-season-heading"><span class="cinematic-season-label">Seasons</span><span class="cinematic-season-loading" aria-live="polite" hidden></span></div><div class="cinematic-season-list" role="tablist" aria-label="Choose a season">${cards}</div></div>`;
+}
+
+function cinematicSeasonEpisodes(show, episodes, seriesPlayback) {
+  const activeEpisode = episodes.find((episode) => episode.ratingKey === seriesPlayback?.episode?.ratingKey) || episodes[0] || null;
+  if (!activeEpisode) return '<div class="cinematic-season-empty">No episodes are available for this season.</div>';
+  return `<div class="cinematic-episode-copy"><h2><span id="cinematic-episode-number">${esc(activeEpisode.episodeNumber || '')}</span> <span id="cinematic-episode-title">${esc(activeEpisode.title)}</span></h2><p id="cinematic-episode-summary">${esc(activeEpisode.summary || show.summary || '')}</p></div>${cinematicShelf('Episodes', episodes, { episode: true })}`;
 }
 
 function personPage(profile) {
@@ -984,7 +1013,19 @@ function bindPage() {
     refreshCinematicSearchResults();
   });
   bindDynamicMediaCards(document);
-  document.querySelectorAll('.section').forEach((section) => {
+  bindRailSections(document);
+  const autofocus = document.querySelector('[autofocus]');
+  if (autofocus) autofocus.focus();
+  else if (document.activeElement === document.body) initialFocus()?.focus();
+  requestAnimationFrame(() => {
+    if (document.activeElement === document.body) initialFocus()?.focus();
+  });
+}
+
+function bindRailSections(root) {
+  root.querySelectorAll('.section').forEach((section) => {
+    if (section.dataset.railBound === 'true') return;
+    section.dataset.railBound = 'true';
     const rail = section.querySelector('.rail');
     if (!rail) return;
     const refresh = () => updateRailArrows(section);
@@ -994,12 +1035,6 @@ function bindPage() {
       rail.closest('.cinematic-scroll, .cinematic-detail-scroll, .cinematic-utility-scroll, .browse-scroll, .detail-page, .search-page, .collections-page')?.scrollBy({ top: event.deltaY, behavior: 'auto' });
     }, { passive: false });
     requestAnimationFrame(refresh);
-  });
-  const autofocus = document.querySelector('[autofocus]');
-  if (autofocus) autofocus.focus();
-  else if (document.activeElement === document.body) initialFocus()?.focus();
-  requestAnimationFrame(() => {
-    if (document.activeElement === document.body) initialFocus()?.focus();
   });
 }
 
@@ -1554,36 +1589,99 @@ async function openDetails(key) {
     const seriesPlayback = item?.kind === 'show' ? await resolveSeriesPlayback(item, children) : null;
     const activeSeason = item?.kind === 'show' ? children.find((season) => season.ratingKey === seriesPlayback?.episode?.parentRatingKey) || children[0] : null;
     const episodes = activeSeason ? await window.minova.children(activeSeason.ratingKey).catch(() => []) : [];
-    state.route = { type: 'detail', item: item || findItem(key), children, seriesPlayback, activeSeasonKey: activeSeason?.ratingKey || null, episodes }; render();
+    state.route = {
+      type: 'detail',
+      item: item || findItem(key),
+      children,
+      seriesPlayback,
+      activeSeasonKey: activeSeason?.ratingKey || null,
+      episodes,
+      seasonEpisodes: activeSeason ? { [activeSeason.ratingKey]: episodes } : {},
+    };
+    render();
   } catch (error) { showToast(errorMessage(error)); goBack(); }
 }
 
 function focusSeason(key) {
-  requestAnimationFrame(() => document.querySelector(`.cinematic-season-tabs [data-key="${CSS.escape(key)}"]`)?.focus());
+  requestAnimationFrame(() => {
+    const target = document.querySelector(`.cinematic-season-tabs [data-key="${CSS.escape(key)}"]`);
+    if (!target) return;
+    target.focus({ preventScroll: true });
+    const list = target.closest('.cinematic-season-list');
+    if (!list) return;
+    const card = target.getBoundingClientRect();
+    const rail = list.getBoundingClientRect();
+    if (card.left < rail.left) list.scrollBy({ left: card.left - rail.left - 8, behavior: 'smooth' });
+    else if (card.right > rail.right) list.scrollBy({ left: card.right - rail.right + 8, behavior: 'smooth' });
+  });
 }
 
 async function selectSeason(key) {
   const route = state.route;
   if (route.type !== 'detail' || route.item?.kind !== 'show') return;
-  if (!route.children?.some((season) => season.ratingKey === key)) return;
+  const season = route.children?.find((entry) => entry.ratingKey === key);
+  if (!season) return;
+  if (route.activeSeasonKey === key && route.episodes?.length) {
+    focusSeason(key);
+    return;
+  }
 
   const request = ++seasonSelectionRequest;
   const previousSeasonKey = route.activeSeasonKey;
   const previousEpisodes = route.episodes || [];
-  state.route = { ...route, activeSeasonKey: key, episodes: [] };
-  render();
+  const scroller = document.querySelector('.cinematic-detail-scroll');
+  const scrollTop = scroller?.scrollTop || 0;
+  const panel = document.querySelector('.cinematic-season-panel');
+  const loading = document.querySelector('.cinematic-season-loading');
+  document.querySelectorAll('.cinematic-season-card').forEach((button) => {
+    const selected = button.dataset.key === key;
+    button.classList.toggle('active', selected);
+    button.setAttribute('aria-selected', String(selected));
+  });
+  panel?.classList.add('is-loading');
+  panel?.setAttribute('aria-busy', 'true');
+  if (loading) {
+    loading.hidden = false;
+    loading.textContent = `Loading ${seasonDisplayTitle(season)}…`;
+  }
+  state.route = { ...route, activeSeasonKey: key, episodes: previousEpisodes };
   focusSeason(key);
 
   try {
-    const episodes = (await window.minova.children(key)).filter((item) => item.kind === 'episode');
+    const cached = route.seasonEpisodes?.[key];
+    const episodes = cached || (await window.minova.children(key)).filter((item) => item.kind === 'episode');
     if (request !== seasonSelectionRequest || state.route.type !== 'detail' || state.route.activeSeasonKey !== key) return;
-    state.route = { ...state.route, episodes };
-    render();
+    state.route = {
+      ...state.route,
+      episodes,
+      seasonEpisodes: { ...(state.route.seasonEpisodes || {}), [key]: episodes },
+    };
+    const livePanel = document.querySelector('.cinematic-season-panel');
+    if (livePanel) {
+      livePanel.innerHTML = cinematicSeasonEpisodes(state.route.item, episodes, state.route.seriesPlayback);
+      bindDynamicMediaCards(livePanel);
+      bindRailSections(livePanel);
+      livePanel.classList.remove('is-loading');
+      livePanel.classList.add('is-entering');
+      livePanel.setAttribute('aria-busy', 'false');
+      requestAnimationFrame(() => requestAnimationFrame(() => livePanel.classList.remove('is-entering')));
+    }
+    const liveLoading = document.querySelector('.cinematic-season-loading');
+    if (liveLoading) { liveLoading.hidden = true; liveLoading.textContent = ''; }
+    if (scroller) scroller.scrollTop = scrollTop;
     focusSeason(key);
   } catch (error) {
     if (request !== seasonSelectionRequest || state.route.type !== 'detail' || state.route.activeSeasonKey !== key) return;
     state.route = { ...state.route, activeSeasonKey: previousSeasonKey, episodes: previousEpisodes };
-    render();
+    document.querySelectorAll('.cinematic-season-card').forEach((button) => {
+      const selected = button.dataset.key === previousSeasonKey;
+      button.classList.toggle('active', selected);
+      button.setAttribute('aria-selected', String(selected));
+    });
+    panel?.classList.remove('is-loading');
+    panel?.setAttribute('aria-busy', 'false');
+    if (loading) { loading.hidden = true; loading.textContent = ''; }
+    if (scroller) scroller.scrollTop = scrollTop;
     if (previousSeasonKey) focusSeason(previousSeasonKey);
     showToast(`Could not load this season: ${errorMessage(error)}`);
   }
@@ -2138,15 +2236,22 @@ window.__runMinovaQa = async function runMinovaQa() {
   check('Series Cast & Crew includes actor pictures', Boolean(document.querySelector('.cast-section .credit-avatar img')), document.querySelectorAll('.cast-section .credit-avatar img').length);
   const seasonLabel = document.querySelector('.cinematic-season-label');
   const seasonButtons = [...document.querySelectorAll('.cinematic-season-tabs [data-action="season"]')];
-  check('Season selector uses a Season label with clickable numbers', seasonLabel?.textContent === 'Season' && seasonButtons.length > 0 && seasonButtons.every((button) => /^\d+$/.test(button.textContent.trim())), `${seasonLabel?.textContent || 'missing'}:${seasonButtons.map((button) => button.textContent.trim()).join(',')}`);
+  check('Season selector uses clickable season posters', seasonLabel?.textContent === 'Seasons' && seasonButtons.length > 0 && seasonButtons.every((button) => button.querySelector('.cinematic-season-art') && button.querySelector('.cinematic-season-copy strong')?.textContent), `${seasonLabel?.textContent || 'missing'}:${seasonButtons.map((button) => button.querySelector('strong')?.textContent).join(',')}`);
+  const seriesScroller = document.querySelector('.cinematic-detail-scroll');
+  const seasonPicker = document.querySelector('.cinematic-season-tabs');
+  if (seriesScroller && seasonPicker) seriesScroller.scrollTop = Math.max(0, seriesScroller.scrollTop + seasonPicker.getBoundingClientRect().top - 76);
+  await wait(80);
   const secondSeason = seasonButtons[1];
   const secondSeasonRect = secondSeason?.getBoundingClientRect();
   const secondSeasonHit = secondSeasonRect ? document.elementFromPoint(secondSeasonRect.left + secondSeasonRect.width / 2, secondSeasonRect.top + secondSeasonRect.height / 2) : null;
-  check('Season buttons are not blocked by the overlapping detail panel', secondSeasonHit === secondSeason || secondSeasonHit?.closest('[data-action="season"]') === secondSeason, secondSeasonHit?.className || secondSeasonHit?.tagName || 'missing');
+  check('Season posters are not blocked by the overlapping detail panel', secondSeasonHit === secondSeason || secondSeasonHit?.closest('[data-action="season"]') === secondSeason, secondSeasonHit?.className || secondSeasonHit?.tagName || 'missing');
+  const seasonScrollBefore = seriesScroller?.scrollTop || 0;
+  const seasonScrollerBefore = seriesScroller;
   secondSeason?.click(); await wait(180);
   check('Selecting a season loads and displays that season', state.route.activeSeasonKey === 'demo-6-season-2' && state.route.episodes?.length === 3 && state.route.episodes.every((episode) => episode.seasonNumber === 2) && document.querySelector('.cinematic-season-tabs [data-key="demo-6-season-2"]')?.classList.contains('active'), `${state.route.activeSeasonKey}:${state.route.episodes?.map((episode) => episode.seasonNumber).join(',')}`);
+  check('Season switching keeps the detail scroller and vertical position stable', document.querySelector('.cinematic-detail-scroll') === seasonScrollerBefore && Math.abs((seriesScroller?.scrollTop || 0) - seasonScrollBefore) < 3, `${seasonScrollBefore}:${seriesScroller?.scrollTop || 0}`);
   await press('ArrowRight');
-  check('Left and right keys move through season numbers', document.activeElement?.dataset?.key === 'demo-6-season-3', activeLabel());
+  check('Left and right keys move through season posters', document.activeElement?.dataset?.key === 'demo-6-season-3', activeLabel());
   document.querySelector('.cinematic-season-tabs [data-key="demo-6-season-1"]')?.click(); await wait(180);
   const seriesActions = document.querySelector('.cinematic-series-detail .cinematic-actions');
   const seriesTabs = document.querySelector('.cinematic-season-tabs');
