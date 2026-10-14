@@ -22,8 +22,11 @@ test('desktop surfaces use the supplied high-resolution Minova brand', () => {
 
   const renderer = [
     fs.readFileSync(path.join(root, 'src', 'app.js'), 'utf8'),
+    fs.readFileSync(path.join(root, 'src', 'app-experimental.js'), 'utf8'),
     fs.readFileSync(path.join(root, 'src', 'index.html'), 'utf8'),
+    fs.readFileSync(path.join(root, 'src', 'index-experimental.html'), 'utf8'),
     fs.readFileSync(path.join(root, 'src', 'styles.css'), 'utf8'),
+    fs.readFileSync(path.join(root, 'src', 'styles-experimental.css'), 'utf8'),
   ].join('\n');
   assert.match(renderer, /minova-cinema-wordmark\.png/);
   assert.match(renderer, /minova-symbol-color\.png/);

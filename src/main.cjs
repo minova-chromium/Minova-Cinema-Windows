@@ -36,6 +36,8 @@ const qaTokenArgument = process.argv.find((value) => value.startsWith('--qa-toke
 const nativeQaReportArgument = process.argv.find((value) => value.startsWith('--native-qa-report='));
 const nativeQaMediaArgument = process.argv.find((value) => value.startsWith('--native-qa-media='));
 const nativeQaCaptureArgument = process.argv.find((value) => value.startsWith('--native-qa-capture='));
+const forceExperimentalUi = process.argv.includes('--experimental-ui');
+const forceStableUi = process.argv.includes('--stable-ui');
 const qaMode = Boolean(qaReportArgument || qaPersistenceSaveArgument || qaPersistenceCheckArgument || nativeQaReportArgument);
 
 if (qaProfileArgument) {
@@ -49,6 +51,18 @@ function configPath() { return path.join(app.getPath('userData'), 'settings.json
 function readStored() { return readSettings(configPath()); }
 
 function writeStored(settings) { writeSettings(configPath(), settings); }
+
+function selectedUiMode() {
+  if (forceExperimentalUi) return 'experimental';
+  if (forceStableUi) return 'stable';
+  return readStored().uiMode === 'experimental' ? 'experimental' : 'stable';
+}
+
+function loadSelectedRenderer() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const file = selectedUiMode() === 'experimental' ? 'index-experimental.html' : 'index.html';
+  mainWindow.loadFile(path.join(__dirname, file));
+}
 
 function migratePreviousDesktopProfile() {
   if (demoMode || qaProfileArgument) return { migrated: false };
@@ -392,6 +406,7 @@ function registerIpc() {
       connected: Boolean(connection), server: connection?.server || '', quality: connection?.quality || 'original',
       enhancement: stored.enhancement || 'balanced', volume: Number.isFinite(stored.volume) ? stored.volume : 100,
       splitAlphabetical: stored.splitAlphabetical === true,
+      uiMode: selectedUiMode(),
       autoplayNextEpisode: stored.autoplayNextEpisode !== false,
       demoMode, captureView,
     };
@@ -453,9 +468,17 @@ function registerIpc() {
       enhancement: preferences.enhancement || stored.enhancement || 'balanced',
       volume: Number.isFinite(preferences.volume) ? preferences.volume : (Number.isFinite(stored.volume) ? stored.volume : 100),
       splitAlphabetical: typeof preferences.splitAlphabetical === 'boolean' ? preferences.splitAlphabetical : stored.splitAlphabetical === true,
+      uiMode: preferences.uiMode === 'experimental' || preferences.uiMode === 'stable' ? preferences.uiMode : (stored.uiMode === 'experimental' ? 'experimental' : 'stable'),
       autoplayNextEpisode: typeof preferences.autoplayNextEpisode === 'boolean' ? preferences.autoplayNextEpisode : stored.autoplayNextEpisode !== false,
     });
     return true;
+  });
+  ipcMain.handle('ui:set-mode', (_event, mode) => {
+    if (!['stable', 'experimental'].includes(mode)) throw new Error('Unknown interface mode.');
+    if (forceExperimentalUi || forceStableUi) return selectedUiMode();
+    writeStored({ ...readStored(), uiMode: mode });
+    setImmediate(loadSelectedRenderer);
+    return mode;
   });
   ipcMain.handle('config:disconnect', () => {
     activeClient = null;
@@ -780,7 +803,7 @@ function createWindow() {
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
   mainWindow.removeMenu();
-  mainWindow.loadFile(path.join(__dirname, 'index.html'));
+  loadSelectedRenderer();
   mainWindow.once('ready-to-show', () => mainWindow.show());
   for (const event of ['move', 'resize', 'restore', 'maximize', 'unmaximize', 'enter-full-screen', 'leave-full-screen']) {
     mainWindow.on(event, () => setImmediate(() => { syncPlayerOverlay(); publishWindowMode(); }));

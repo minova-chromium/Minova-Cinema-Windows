@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('minova', {
     cancel: () => ipcRenderer.invoke('plex-auth:cancel'),
   },
   savePreferences: (preferences) => ipcRenderer.invoke('config:save-preferences', preferences),
+  setUiMode: (mode) => ipcRenderer.invoke('ui:set-mode', mode),
   disconnect: () => ipcRenderer.invoke('config:disconnect'),
   loadCatalog: () => ipcRenderer.invoke('catalog:load'),
   details: (key) => ipcRenderer.invoke('media:details', key),
