@@ -62,6 +62,11 @@ function formatTime(ms) {
   return minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60 ? `${minutes % 60}m` : ''}`.trim() : `${minutes} min`;
 }
 
+function formatBytes(bytes) {
+  const value = Math.max(0, Number(bytes) || 0);
+  return value < 1024 * 1024 ? `${Math.round(value / 1024)} KB` : `${(value / (1024 * 1024)).toFixed(value < 10 * 1024 * 1024 ? 1 : 0)} MB`;
+}
+
 function formatClock(secondsValue) {
   const seconds = Math.max(0, Math.floor(Number(secondsValue) || 0));
   const hours = Math.floor(seconds / 3600);
@@ -814,6 +819,12 @@ function settingsPage() {
         <div class="connection-details"><span>Connection</span><strong>${connectionLabel}</strong><span>Server</span><strong class="server-value">${esc(serverLabel)}</strong><span>Internet outage</span><strong>${esc(outageLabel)}</strong></div>
         <div class="secure-note"><span>✓</span><div><strong>${state.config.offlineLanReady ? 'Local playback ready' : 'Remembered securely'}</strong><small>${state.config.offlineLanReady ? 'Minova will switch to the saved LAN address automatically when internet access is unavailable.' : 'Your token is encrypted by Windows and restored automatically.'}</small></div></div>
         <div class="settings-actions"><button class="secondary settings-button" data-action="sync">Sync Plex now</button>${state.config.demoMode ? '' : '<button class="danger settings-button" data-action="disconnect">Disconnect</button>'}</div>
+      </section>
+      <section class="settings-card storage-card"><div class="settings-card-head"><span class="settings-icon">▣</span><div><span class="settings-kicker">Offline</span><h2>Artwork storage</h2></div></div>
+        <p>Save posters, backdrops, and cast photos as you browse. Cached artwork remains available when Plex is reachable only through your local network.</p>
+        <label class="field"><span>Save new artwork locally</span><select id="artwork-cache"><option value="on" ${state.config.artworkCacheEnabled !== false ? 'selected' : ''}>On · up to ${formatBytes(state.config.artworkCacheMaxBytes)}</option><option value="off" ${state.config.artworkCacheEnabled === false ? 'selected' : ''}>Off · do not save new artwork</option></select></label>
+        <div class="connection-details"><span>Currently saved</span><strong>${formatBytes(state.config.artworkCacheBytes)} · ${Number(state.config.artworkCacheEntries || 0)} images</strong></div>
+        <div class="settings-actions"><button class="primary settings-button" data-action="save-artwork-cache">Save artwork setting</button><button class="secondary settings-button" data-action="clear-artwork-cache">Clear saved artwork</button></div>
       </section>
       <section class="settings-card window-card"><div class="settings-card-head"><span class="settings-icon">⛶</span><div><span class="settings-kicker">Display</span><h2>Window mode</h2></div></div>
         <p>Use the normal resizable window or switch to a distraction-free cinema view.</p>
@@ -1830,6 +1841,16 @@ document.addEventListener('click', async (event) => {
     state.config.enhancement = document.getElementById('enhancement').value;
     state.config.autoplayNextEpisode = document.getElementById('autoplay-next').value === 'on';
     await window.minova.savePreferences({ quality: state.config.quality, enhancement: state.config.enhancement, autoplayNextEpisode: state.config.autoplayNextEpisode }); showToast('Native playback settings saved.');
+  } else if (action === 'save-artwork-cache') {
+    state.config.artworkCacheEnabled = document.getElementById('artwork-cache').value === 'on';
+    await window.minova.savePreferences({ artworkCacheEnabled: state.config.artworkCacheEnabled });
+    showToast(state.config.artworkCacheEnabled ? 'New artwork will be saved for offline use.' : 'New artwork will no longer be saved. Existing files were kept.');
+  } else if (action === 'clear-artwork-cache') {
+    const result = await window.minova.clearArtworkCache();
+    state.config.artworkCacheBytes = result.bytes;
+    state.config.artworkCacheEntries = result.entries;
+    render();
+    showToast('Saved artwork cleared. Your Plex login and preferences were kept.');
   } else if (action === 'save-browsing') {
     state.config.splitAlphabetical = document.getElementById('grid-organization').value === 'sections';
     await window.minova.savePreferences({ splitAlphabetical: state.config.splitAlphabetical });
@@ -2291,7 +2312,7 @@ window.__runMinovaQa = async function runMinovaQa() {
 
   document.querySelector('[data-action="settings"]').click(); await wait(140);
   check('Settings receives focus on its header control', document.activeElement?.dataset?.action === 'settings', activeLabel());
-  check('Settings uses a focused combined dashboard with interface, updates, and Library layout', document.querySelectorAll('.settings-grid .settings-card').length === 7 && Boolean(document.querySelector('[data-action="check-update"]')) && Boolean(document.getElementById('grid-organization')) && Boolean(document.getElementById('ui-mode')), document.querySelectorAll('.settings-grid .settings-card').length);
+  check('Settings uses a focused combined dashboard with offline artwork, interface, updates, and Library layout', document.querySelectorAll('.settings-grid .settings-card').length === 8 && Boolean(document.querySelector('[data-action="check-update"]')) && Boolean(document.getElementById('artwork-cache')) && Boolean(document.getElementById('grid-organization')) && Boolean(document.getElementById('ui-mode')), document.querySelectorAll('.settings-grid .settings-card').length);
   check('Settings keeps the Minova cinematic shell', Boolean(document.querySelector('.cinematic-settings-page .cinematic-sidebar')) && !document.querySelector('.cinematic-settings-page .topbar'), document.querySelector('.cinematic-settings-page') ? 'cinematic' : 'missing');
   check('Settings dashboard uses two columns', getComputedStyle(document.querySelector('.settings-grid')).gridTemplateColumns.split(' ').length === 2, getComputedStyle(document.querySelector('.settings-grid')).gridTemplateColumns);
   const previousUpdate = state.update;

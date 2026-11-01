@@ -2,6 +2,7 @@ const { app, BrowserWindow, desktopCapturer, ipcMain, nativeImage, protocol, saf
 const fs = require('node:fs');
 const path = require('node:path');
 const { autoUpdater } = require('electron-updater');
+const { ArtworkCache } = require('./artwork-cache.cjs');
 const { PlexClient, isPlexOwnedHost, isTrustedExternalArtworkUrl, normalizeServer, plexHeaders, rewritePlaylist } = require('./plex.cjs');
 const { awaitPlexAuthorization, createPlexPin, discoverPlexServers } = require('./plex-auth.cjs');
 const { isDirectLanUri, serverCandidateUris, tryServerCandidates } = require('./lan-connections.cjs');
@@ -26,6 +27,7 @@ let lanRediscoveryAttempted = false;
 const rejectedLanCandidates = new Map();
 let updateTimer;
 let updateAccepted = false;
+let artworkCache;
 let updateState = {
   status: 'idle', currentVersion: app.getVersion(), availableVersion: null,
   progress: 0, message: 'Automatic update checks are enabled.',
@@ -53,6 +55,11 @@ if (qaProfileArgument) {
 }
 
 function configPath() { return path.join(app.getPath('userData'), 'settings.json'); }
+
+function getArtworkCache() {
+  if (!artworkCache) artworkCache = new ArtworkCache(path.join(app.getPath('userData'), 'offline-artwork'));
+  return artworkCache;
+}
 
 function readStored() { return readSettings(configPath()); }
 
@@ -509,6 +516,19 @@ async function installMediaProtocol() {
       }
       const isServerMedia = serverOrigins.has(target.origin);
       if (!isServerMedia && !isTrustedExternalArtworkUrl(target.toString())) return new Response('Blocked media origin', { status: 403 });
+      const cacheEnabled = readStored().artworkCacheEnabled !== false;
+      const cachedArtwork = cacheEnabled ? await getArtworkCache().get(requested) : null;
+      if (cachedArtwork) {
+        return new Response(cachedArtwork.body, {
+          status: 200,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Content-Type': cachedArtwork.contentType,
+            'Content-Length': String(cachedArtwork.body.length),
+            'X-Minova-Artwork-Cache': 'hit',
+          },
+        });
+      }
       const headers = isServerMedia || isPlexOwnedHost(target.hostname)
         ? plexHeaders(connection.token, {}, connection.clientIdentifier)
         : { Accept: 'image/*' };
@@ -522,6 +542,15 @@ async function installMediaProtocol() {
         responseHeaders.delete('content-length');
         const playlist = rewritePlaylist(await upstream.text(), target, proxyUrl);
         return new Response(playlist, { status: upstream.status, headers: responseHeaders });
+      }
+      if (cacheEnabled && upstream.ok && type.toLowerCase().startsWith('image/')) {
+        const body = Buffer.from(await upstream.arrayBuffer());
+        await getArtworkCache().put(requested, body, type).catch(() => false);
+        responseHeaders.delete('content-encoding');
+        responseHeaders.delete('transfer-encoding');
+        responseHeaders.set('Content-Length', String(body.length));
+        responseHeaders.set('X-Minova-Artwork-Cache', 'stored');
+        return new Response(body, { status: upstream.status, headers: responseHeaders });
       }
       return new Response(upstream.body, { status: upstream.status, headers: responseHeaders });
     } catch (error) {
@@ -538,9 +567,14 @@ function registerIpc() {
     if (!demoMode) await discoverAndRememberLanFallback().catch(() => false);
     const connection = getConnection();
     const stored = readStored();
+    const artworkStats = await getArtworkCache().stats();
     return {
       connected: Boolean(connection), server: connection?.server || '', quality: connection?.quality || 'original',
       offlineLanReady: connection?.serverCandidates?.some((candidate) => isDirectLanUri(candidate)) === true,
+      artworkCacheEnabled: stored.artworkCacheEnabled !== false,
+      artworkCacheBytes: artworkStats.bytes,
+      artworkCacheEntries: artworkStats.entries,
+      artworkCacheMaxBytes: artworkStats.maxBytes,
       enhancement: stored.enhancement || 'balanced', volume: Number.isFinite(stored.volume) ? stored.volume : 100,
       splitAlphabetical: stored.splitAlphabetical === true,
       uiMode: selectedUiMode(),
@@ -607,9 +641,11 @@ function registerIpc() {
       splitAlphabetical: typeof preferences.splitAlphabetical === 'boolean' ? preferences.splitAlphabetical : stored.splitAlphabetical === true,
       uiMode: preferences.uiMode === 'experimental' || preferences.uiMode === 'stable' ? preferences.uiMode : (stored.uiMode === 'experimental' ? 'experimental' : 'stable'),
       autoplayNextEpisode: typeof preferences.autoplayNextEpisode === 'boolean' ? preferences.autoplayNextEpisode : stored.autoplayNextEpisode !== false,
+      artworkCacheEnabled: typeof preferences.artworkCacheEnabled === 'boolean' ? preferences.artworkCacheEnabled : stored.artworkCacheEnabled !== false,
     });
     return true;
   });
+  ipcMain.handle('artwork-cache:clear', () => getArtworkCache().clear());
   ipcMain.handle('ui:set-mode', (_event, mode) => {
     if (!['stable', 'experimental'].includes(mode)) throw new Error('Unknown interface mode.');
     if (forceExperimentalUi || forceStableUi) return selectedUiMode();
