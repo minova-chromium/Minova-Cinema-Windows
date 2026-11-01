@@ -478,7 +478,7 @@ function onboarding() {
     ${state.error ? `<p class="error">${esc(state.error)}</p>` : ''}
     <button class="manual-setup-toggle" type="button" data-action="toggle-manual">${state.manualSetup ? 'Hide advanced manual setup' : 'Advanced manual setup'}</button>
     ${state.manualSetup ? `<form id="connect-form" class="manual-connect-form">
-      <p>For reverse proxies, Tailscale, or custom server addresses.</p>
+      <p>For reverse proxies, Tailscale, or custom server addresses. A direct LAN address keeps playback available during an internet outage.</p>
       <label class="field"><span>Plex server</span><input id="server" value="${esc(state.config?.server || '')}" placeholder="192.168.1.10:32400" autocomplete="url" required></label>
       <label class="field"><span>X-Plex-Token</span><span class="token-row"><input id="token" type="password" placeholder="${remembered ? 'Saved securely — leave blank to reuse it' : 'Paste your Plex token'}" autocomplete="off" ${remembered ? '' : 'required'}><button class="secondary token-toggle" type="button" data-action="toggle-token" aria-label="Show Plex token">Show</button></span></label>
       <div class="connect-footer"><span class="connection-note">Windows encrypted &nbsp;•&nbsp; Auto reconnect &nbsp;•&nbsp; Direct Play</span><button class="primary connect-button" type="submit">Connect manually</button></div>
@@ -494,6 +494,7 @@ function settingsPage() {
   const serverLabel = state.config.server || 'Visual demo';
   const connectionLabel = state.config.demoMode ? 'Demo mode' : 'Connected';
   const securityLabel = state.config.demoMode ? 'Preview catalog' : 'Windows encrypted';
+  const outageLabel = state.config.demoMode ? 'Preview only' : state.config.offlineLanReady ? 'LAN fallback ready' : 'Use a direct LAN address';
   return `<div class="screen app-shell">${header()}<div class="content"><div class="settings-page">
     <div class="settings-heading"><div><h1 class="page-heading">Settings</h1><p class="page-subheading">Playback, connection, and desktop controls</p></div><div class="settings-status"><span class="status-dot"></span>${connectionLabel}<small>${securityLabel}</small></div></div>
     <div class="settings-grid">
@@ -509,8 +510,8 @@ function settingsPage() {
         <button class="primary settings-button" data-action="save-settings">Save playback settings</button>
       </section>
       <section class="settings-card connection-card"><div class="settings-card-head"><span class="settings-icon">●</span><div><span class="settings-kicker">Plex</span><h2>Media Server</h2></div></div>
-        <div class="connection-details"><span>Connection</span><strong>${connectionLabel}</strong><span>Server</span><strong class="server-value">${esc(serverLabel)}</strong></div>
-        <div class="secure-note"><span>✓</span><div><strong>Remembered securely</strong><small>Your token is encrypted by Windows and restored automatically.</small></div></div>
+        <div class="connection-details"><span>Connection</span><strong>${connectionLabel}</strong><span>Server</span><strong class="server-value">${esc(serverLabel)}</strong><span>Internet outage</span><strong>${esc(outageLabel)}</strong></div>
+        <div class="secure-note"><span>✓</span><div><strong>${state.config.offlineLanReady ? 'Local playback ready' : 'Remembered securely'}</strong><small>${state.config.offlineLanReady ? 'Minova will switch to the saved LAN address automatically when internet access is unavailable.' : 'Your token is encrypted by Windows and restored automatically.'}</small></div></div>
         <div class="settings-actions"><button class="secondary settings-button" data-action="sync">Sync Plex now</button>${state.config.demoMode ? '' : '<button class="danger settings-button" data-action="disconnect">Disconnect</button>'}</div>
       </section>
       <section class="settings-card window-card"><div class="settings-card-head"><span class="settings-icon">⛶</span><div><span class="settings-kicker">Display</span><h2>Window mode</h2></div></div>

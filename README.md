@@ -5,6 +5,7 @@ The Windows edition mirrors the Android TV 2.9 visual language while adapting it
 ## Features
 
 - Secure Plex browser sign-in with automatic owned/shared server discovery and local-first connection selection.
+- Automatic direct-LAN fallback for browsing and playback during internet outages when the Windows PC and Plex server remain on the same router.
 - Advanced manual connection for reverse proxies, Tailscale, and custom Plex server addresses.
 - Windows-encrypted Plex token; the renderer never receives the token.
 - Continue Watching, discovery shelves, Movies, Series, Collections, Watchlist, and search.

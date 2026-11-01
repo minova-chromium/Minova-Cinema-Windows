@@ -1,4 +1,5 @@
 const PLEX_ACCOUNT_URL = 'https://plex.tv/';
+const { expandPlexConnections } = require('./lan-connections.cjs');
 const PRODUCT_VERSION = require('../package.json').version;
 
 function accountHeaders(clientIdentifier, token = null) {
@@ -84,13 +85,12 @@ async function awaitPlexAuthorization({
 }
 
 function rankPlexConnections(connections = []) {
-  return connections
+  return expandPlexConnections(connections)
     .filter((connection) => String(connection?.uri || '').trim())
-    .filter((connection, index, values) => values.findIndex((candidate) =>
-      String(candidate.uri).replace(/\/$/, '') === String(connection.uri).replace(/\/$/, '')) === index)
     .sort((left, right) => {
       const tier = (connection) => connection.local === true ? 0 : connection.relay !== true ? 1 : 2;
       return tier(left) - tier(right)
+        || Number(left.offlineFallback === true) - Number(right.offlineFallback === true)
         || Number(!String(left.uri).startsWith('https://')) - Number(!String(right.uri).startsWith('https://'));
     });
 }

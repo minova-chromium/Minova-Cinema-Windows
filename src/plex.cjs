@@ -194,14 +194,14 @@ class PlexClient {
     this.clientIdentifier = clientIdentifier;
   }
 
-  async request(path, { method = 'GET', origin = this.server, extraHeaders = {} } = {}) {
+  async request(path, { method = 'GET', origin = this.server, extraHeaders = {}, timeoutMs = 45000 } = {}) {
     const url = /^https?:\/\//i.test(path) ? path : new URL(String(path).replace(/^\//, ''), `${origin}/`).toString();
     let response;
     try {
       response = await fetch(url, {
         method,
         headers: plexHeaders(this.token, extraHeaders, this.clientIdentifier),
-        signal: AbortSignal.timeout(45000),
+        signal: AbortSignal.timeout(timeoutMs),
       });
     } catch (error) {
       const target = new URL(url);
@@ -213,14 +213,19 @@ class PlexClient {
     return type.includes('json') ? response.json() : {};
   }
 
-  async paged(path, origin = this.server, pageSize = PAGE_SIZE) {
+  async paged(path, origin = this.server, pageSize = PAGE_SIZE, requestOptions = {}) {
     const output = [];
     for (let start = 0; start < 200000; start += pageSize) {
       const url = new URL(path.replace(/^\//, ''), `${origin}/`);
       url.searchParams.set('X-Plex-Container-Start', String(start));
       url.searchParams.set('X-Plex-Container-Size', String(pageSize));
       const payload = await this.request(url.toString(), {
-        extraHeaders: { 'X-Plex-Container-Start': String(start), 'X-Plex-Container-Size': String(pageSize) },
+        ...requestOptions,
+        extraHeaders: {
+          ...(requestOptions.extraHeaders || {}),
+          'X-Plex-Container-Start': String(start),
+          'X-Plex-Container-Size': String(pageSize),
+        },
       });
       const page = metadataList(payload);
       output.push(...page);
@@ -230,8 +235,8 @@ class PlexClient {
     return output;
   }
 
-  async test() {
-    const payload = await this.request('/library/sections');
+  async test({ timeoutMs = 45000 } = {}) {
+    const payload = await this.request('/library/sections', { timeoutMs });
     return payload?.MediaContainer?.friendlyName || new URL(this.server).hostname;
   }
 
@@ -271,7 +276,12 @@ class PlexClient {
 
   async loadWatchlist(localMedia) {
     const discover = 'https://discover.provider.plex.tv';
-    const rows = await this.paged('/library/sections/watchlist/all?includeCollections=1&includeExternalMedia=1', discover, 10);
+    const rows = await this.paged(
+      '/library/sections/watchlist/all?includeCollections=1&includeExternalMedia=1',
+      discover,
+      10,
+      { timeoutMs: 3500 },
+    );
     const byIdentity = new Map();
     for (const item of localMedia) for (const identity of item.identities || []) byIdentity.set(identity, item);
     const byTitleYear = new Map(localMedia.map((item) => [`${item.kind}|${item.title.toLowerCase()}|${item.year}`, item]));

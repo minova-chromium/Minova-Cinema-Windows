@@ -4,6 +4,8 @@ const path = require('node:path');
 const { autoUpdater } = require('electron-updater');
 const { PlexClient, isPlexOwnedHost, isTrustedExternalArtworkUrl, normalizeServer, plexHeaders, rewritePlaylist } = require('./plex.cjs');
 const { awaitPlexAuthorization, createPlexPin, discoverPlexServers } = require('./plex-auth.cjs');
+const { isDirectLanUri, serverCandidateUris, tryServerCandidates } = require('./lan-connections.cjs');
+const { discoverLanPlexServers } = require('./plex-lan-discovery.cjs');
 const { NativeMpvPlayer, mediaUrl } = require('./native-player.cjs');
 const { ensureClientIdentifier, migrateLegacySettings, readSettings, selectConnectionToken, writeSettings } = require('./settings.cjs');
 const { miniPlayerBounds, resizePlaybackBounds } = require('./window-modes.cjs');
@@ -18,6 +20,10 @@ let miniPlayerRestoreState = null;
 let miniPlayerPinned = false;
 let activeClient;
 let pendingPlexSignIn;
+let lanDiscoveryPromise;
+let lastLanDiscoveryAt = 0;
+let lanRediscoveryAttempted = false;
+const rejectedLanCandidates = new Map();
 let updateTimer;
 let updateAccepted = false;
 let updateState = {
@@ -174,8 +180,14 @@ function getConnection() {
   if (!stored.server || !stored.encryptedToken) return null;
   try {
     const token = safeStorage.decryptString(Buffer.from(stored.encryptedToken, 'base64'));
+    const candidates = serverCandidateUris(stored.server, stored.serverCandidates)
+      .map((candidate) => {
+        try { return normalizeServer(candidate); } catch { return null; }
+      })
+      .filter(Boolean);
     return {
       server: stored.server,
+      serverCandidates: candidates,
       token,
       quality: stored.quality || 'original',
       clientIdentifier: stored.clientIdentifier || getClientIdentifier(),
@@ -183,17 +195,25 @@ function getConnection() {
   } catch { return null; }
 }
 
-function saveConnection(server, token, quality = 'original', clientIdentifier = getClientIdentifier()) {
+function saveConnection(server, token, quality = 'original', clientIdentifier = getClientIdentifier(), candidates = []) {
   if (!safeStorage.isEncryptionAvailable()) throw new Error('Windows secure credential storage is not available.');
   const normalized = normalizeServer(server);
+  const serverCandidates = serverCandidateUris(normalized, candidates)
+    .map((candidate) => {
+      try { return normalizeServer(candidate); } catch { return null; }
+    })
+    .filter(Boolean);
   const stored = readStored();
   writeStored({
     ...stored,
     server: normalized,
+    serverCandidates,
     encryptedToken: safeStorage.encryptString(token).toString('base64'),
     quality,
     clientIdentifier,
   });
+  rejectedLanCandidates.clear();
+  lanRediscoveryAttempted = false;
   activeClient = new PlexClient(normalized, token, clientIdentifier);
   return normalized;
 }
@@ -204,6 +224,115 @@ function requireClient() {
   if (!connection) throw new Error('Connect a Plex server first.');
   activeClient = new PlexClient(connection.server, connection.token, connection.clientIdentifier);
   return activeClient;
+}
+
+function rememberActiveClient(client, connection) {
+  activeClient = client;
+  try {
+    const stored = readStored();
+    writeStored({
+      ...stored,
+      serverCandidates: serverCandidateUris(connection.server, [
+        ...connection.serverCandidates,
+        client.server,
+      ]),
+    });
+  } catch {}
+}
+
+async function discoverAndRememberLanFallback({ force = false } = {}) {
+  const connection = getConnection();
+  if (!connection) return false;
+  if (!force && connection.serverCandidates.some((candidate) => isDirectLanUri(candidate))) return true;
+  if (lanDiscoveryPromise) return lanDiscoveryPromise;
+  if (!force && Date.now() - lastLanDiscoveryAt < 60000) return false;
+  lastLanDiscoveryAt = Date.now();
+  lanRediscoveryAttempted = true;
+  lanDiscoveryPromise = (async () => {
+    const discovered = await discoverLanPlexServers();
+    for (const server of discovered) {
+      try {
+        const candidate = new PlexClient(server.uri, connection.token, connection.clientIdentifier);
+        await candidate.test({ timeoutMs: 2500 });
+        const stored = readStored();
+        writeStored({
+          ...stored,
+          serverCandidates: serverCandidateUris(connection.server, [
+            ...connection.serverCandidates,
+            server.uri,
+          ]),
+        });
+        rejectedLanCandidates.delete(server.uri);
+        activeClient = candidate;
+        return true;
+      } catch {}
+    }
+    return false;
+  })().finally(() => { lanDiscoveryPromise = null; });
+  return lanDiscoveryPromise;
+}
+
+async function orderConnectionCandidates(connection) {
+  const collect = (current) => serverCandidateUris(current.server, current.serverCandidates)
+    .map((candidate) => {
+      try { return normalizeServer(candidate); } catch { return null; }
+    })
+    .filter(Boolean);
+  let candidates = collect(connection);
+  const activeServer = activeClient?.server;
+  if (activeServer && isDirectLanUri(activeServer) && candidates.includes(activeServer)) {
+    return { connection, candidates: [activeServer, ...candidates.filter((candidate) => candidate !== activeServer)] };
+  }
+  for (const server of candidates.filter((candidate) => isDirectLanUri(candidate))) {
+    const rejectedAt = rejectedLanCandidates.get(server) || 0;
+    if (Date.now() - rejectedAt < 60000) continue;
+    const client = activeServer === server ? activeClient : new PlexClient(server, connection.token, connection.clientIdentifier);
+    try {
+      await client.test({ timeoutMs: 1600 });
+      activeClient = client;
+      rejectedLanCandidates.delete(server);
+      return { connection, candidates: [server, ...candidates.filter((candidate) => candidate !== server)] };
+    } catch { rejectedLanCandidates.set(server, Date.now()); }
+  }
+  if (!lanRediscoveryAttempted) {
+    await discoverAndRememberLanFallback({ force: true }).catch(() => false);
+    connection = getConnection() || connection;
+    candidates = collect(connection);
+    if (activeClient && isDirectLanUri(activeClient.server) && candidates.includes(activeClient.server)) {
+      return { connection, candidates: [activeClient.server, ...candidates.filter((candidate) => candidate !== activeClient.server)] };
+    }
+  }
+  const ordered = [activeServer, ...candidates.filter((candidate) => !isDirectLanUri(candidate)), ...candidates.filter(isDirectLanUri)]
+    .filter((candidate, index, values) => candidate && values.indexOf(candidate) === index);
+  return { connection, candidates: ordered };
+}
+
+async function withClientFallback(operation) {
+  let connection = getConnection();
+  if (!connection) throw new Error('Connect a Plex server first.');
+  if (!connection.serverCandidates.some((candidate) => isDirectLanUri(candidate))) {
+    await discoverAndRememberLanFallback().catch(() => false);
+    connection = getConnection() || connection;
+  }
+  const ordered = await orderConnectionCandidates(connection);
+  connection = ordered.connection;
+  const candidates = ordered.candidates;
+  try {
+    const resolved = await tryServerCandidates({
+      servers: candidates,
+      currentClient: activeClient,
+      createClient: (server) => new PlexClient(server, connection.token, connection.clientIdentifier),
+      operation,
+    });
+    rememberActiveClient(resolved.client, connection);
+    return resolved.value;
+  } catch (error) {
+    activeClient = null;
+    if (candidates.length > 1) {
+      throw new Error(`${error?.message || 'Plex could not be reached.'} Minova also tried the saved LAN fallback addresses. Keep both PCs on the same router and confirm Plex Media Server is running.`);
+    }
+    throw error;
+  }
 }
 
 function cancelPlexSignIn() {
@@ -224,6 +353,7 @@ async function connectDiscoveredServer(server) {
         server.accessToken,
         readStored().quality || 'original',
         clientIdentifier,
+        server.connections,
       );
       pendingPlexSignIn = null;
       return { status: 'connected', server: normalized, serverName };
@@ -364,15 +494,20 @@ async function installMediaProtocol() {
       const requested = Buffer.from(encoded, 'base64url').toString('utf8');
       const connection = getConnection();
       if (!connection) return new Response('Not connected', { status: 401 });
-      const target = /^https?:\/\//i.test(requested) ? new URL(requested) : new URL(requested.replace(/^\//, ''), `${connection.server}/`);
-      const serverOrigin = new URL(connection.server).origin;
-      if (['127.0.0.1', 'localhost'].includes(target.hostname) && target.origin !== serverOrigin) {
-        const serverUrl = new URL(connection.server);
+      const preferredServer = activeClient?.server || connection.server;
+      const target = /^https?:\/\//i.test(requested) ? new URL(requested) : new URL(requested.replace(/^\//, ''), `${preferredServer}/`);
+      const serverOrigins = new Set(serverCandidateUris(preferredServer, connection.serverCandidates)
+        .map((candidate) => {
+          try { return new URL(candidate).origin; } catch { return null; }
+        })
+        .filter(Boolean));
+      if (['127.0.0.1', 'localhost'].includes(target.hostname) && !serverOrigins.has(target.origin)) {
+        const serverUrl = new URL(preferredServer);
         target.protocol = serverUrl.protocol;
         target.hostname = serverUrl.hostname;
         target.port = serverUrl.port;
       }
-      const isServerMedia = target.origin === serverOrigin;
+      const isServerMedia = serverOrigins.has(target.origin);
       if (!isServerMedia && !isTrustedExternalArtworkUrl(target.toString())) return new Response('Blocked media origin', { status: 403 });
       const headers = isServerMedia || isPlexOwnedHost(target.hostname)
         ? plexHeaders(connection.token, {}, connection.clientIdentifier)
@@ -399,11 +534,13 @@ function registerIpc() {
   ipcMain.handle('update:get-state', () => updateState);
   ipcMain.handle('update:check', () => checkForAppUpdates());
   ipcMain.handle('update:install', () => acceptAppUpdate());
-  ipcMain.handle('config:get', () => {
+  ipcMain.handle('config:get', async () => {
+    if (!demoMode) await discoverAndRememberLanFallback().catch(() => false);
     const connection = getConnection();
     const stored = readStored();
     return {
       connected: Boolean(connection), server: connection?.server || '', quality: connection?.quality || 'original',
+      offlineLanReady: connection?.serverCandidates?.some((candidate) => isDirectLanUri(candidate)) === true,
       enhancement: stored.enhancement || 'balanced', volume: Number.isFinite(stored.volume) ? stored.volume : 100,
       splitAlphabetical: stored.splitAlphabetical === true,
       uiMode: selectedUiMode(),
@@ -419,7 +556,7 @@ function registerIpc() {
     const clientIdentifier = getClientIdentifier();
     const candidate = new PlexClient(server, effectiveToken, clientIdentifier);
     const serverName = await candidate.test();
-    const normalized = saveConnection(server, effectiveToken, readStored().quality || 'original', clientIdentifier);
+    const normalized = saveConnection(server, effectiveToken, readStored().quality || 'original', clientIdentifier, [server]);
     return { server: normalized, serverName };
   });
   ipcMain.handle('plex-auth:start', async () => {
@@ -482,26 +619,29 @@ function registerIpc() {
   });
   ipcMain.handle('config:disconnect', () => {
     activeClient = null;
+    rejectedLanCandidates.clear();
+    lanRediscoveryAttempted = false;
     cancelPlexSignIn();
     const stored = readStored();
     delete stored.server;
+    delete stored.serverCandidates;
     delete stored.encryptedToken;
     writeStored({ ...stored, clientIdentifier: stored.clientIdentifier || getClientIdentifier() });
     return true;
   });
-  ipcMain.handle('catalog:load', () => demoMode ? demoCatalog() : requireClient().loadCatalog());
-  ipcMain.handle('media:details', (_event, key) => demoMode ? demoDetails(key) : requireClient().details(key));
-  ipcMain.handle('media:children', (_event, key) => demoMode ? demoChildren(key) : requireClient().children(key));
-  ipcMain.handle('media:collection', (_event, key) => demoMode ? demoCatalog().movies : requireClient().collection(key));
-  ipcMain.handle('media:person', (_event, credit) => demoMode ? demoPerson(credit) : requireClient().person(credit));
-  ipcMain.handle('media:set-watched', (_event, { key, watched }) => demoMode || requireClient().setWatched(key, watched));
+  ipcMain.handle('catalog:load', () => demoMode ? demoCatalog() : withClientFallback((client) => client.loadCatalog()));
+  ipcMain.handle('media:details', (_event, key) => demoMode ? demoDetails(key) : withClientFallback((client) => client.details(key)));
+  ipcMain.handle('media:children', (_event, key) => demoMode ? demoChildren(key) : withClientFallback((client) => client.children(key)));
+  ipcMain.handle('media:collection', (_event, key) => demoMode ? demoCatalog().movies : withClientFallback((client) => client.collection(key)));
+  ipcMain.handle('media:person', (_event, credit) => demoMode ? demoPerson(credit) : withClientFallback((client) => client.person(credit)));
+  ipcMain.handle('media:set-watched', (_event, { key, watched }) => demoMode || withClientFallback((client) => client.setWatched(key, watched)));
   ipcMain.handle('media:set-watchlisted', (_event, { providerRatingKey, watchlisted }) => demoMode || requireClient().setWatchlisted(providerRatingKey, watchlisted));
-  ipcMain.handle('media:timeline', (_event, { item, state, timeMs }) => demoMode || requireClient().timeline(item, state, timeMs));
+  ipcMain.handle('media:timeline', (_event, { item, state, timeMs }) => demoMode || withClientFallback((client) => client.timeline(item, state, timeMs)));
   ipcMain.handle('playback:resolve', async (_event, { key, quality }) => {
     if (demoMode) throw new Error('Playback is disabled in visual demo mode.');
-    const item = await requireClient().details(key);
+    const { client, item } = await withClientFallback(async (candidate) => ({ client: candidate, item: await candidate.details(key) }));
     if (!item?.playback?.directPath) throw new Error('Plex did not provide a playable media part.');
-    return { item, directUrl: proxyUrl(item.playback.directPath), hlsUrl: proxyUrl(requireClient().transcodePath(key, quality === 'original' ? '1080' : quality)) };
+    return { item, directUrl: proxyUrl(item.playback.directPath), hlsUrl: proxyUrl(client.transcodePath(key, quality === 'original' ? '1080' : quality)) };
   });
   ipcMain.handle('native-player:start', async (_event, { key, quality }) => startNativePlayback(key, quality));
   ipcMain.handle('native-player:command', async (_event, { action, value }) => {
@@ -722,8 +862,10 @@ function createPlayerOverlay() {
 async function startNativePlayback(key, quality = 'original') {
   if (demoMode) throw new Error('Playback is disabled in visual demo mode.');
   await closeNativePlayback(false);
-  const client = requireClient();
-  const item = await client.details(key);
+  const { client, item } = await withClientFallback(async (candidate) => ({
+    client: candidate,
+    item: await candidate.details(key),
+  }));
   if (!item?.playback?.directPath) throw new Error('Plex did not provide a playable media part.');
   const stored = readStored();
   const direct = mediaUrl(client.server, item.playback.directPath);

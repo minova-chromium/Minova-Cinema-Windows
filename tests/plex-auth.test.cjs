@@ -60,7 +60,7 @@ test('discovers server resources and prefers local, direct, then relay connectio
           connections: [
             { uri: 'https://relay.example', relay: true, local: false },
             { uri: 'http://remote.example:32400', relay: false, local: false },
-            { uri: 'http://local.example:32400', relay: false, local: true },
+            { uri: 'http://local.example:32400', address: '192.168.1.25', port: 32400, relay: false, local: true },
           ],
         },
       ]);
@@ -69,6 +69,7 @@ test('discovers server resources and prefers local, direct, then relay connectio
   assert.equal(servers.length, 1);
   assert.deepEqual(servers[0].connections.map((connection) => connection.uri), [
     'http://local.example:32400',
+    'http://192.168.1.25:32400',
     'http://remote.example:32400',
     'https://relay.example',
   ]);
