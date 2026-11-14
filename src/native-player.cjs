@@ -8,6 +8,12 @@ const path = require('node:path');
 
 const ENHANCEMENT_MODES = ['off', 'balanced', 'high', 'ultra'];
 const PROGRESS_UPDATE_INTERVAL_MS = 200;
+const MAX_VOLUME = 250;
+
+function clampVolume(value, fallback = 100) {
+  const number = Number(value);
+  return Math.max(0, Math.min(MAX_VOLUME, Number.isFinite(number) ? number : fallback));
+}
 
 function resourcePath(...segments) {
   const root = process.resourcesPath && fs.existsSync(path.join(process.resourcesPath, 'vendor'))
@@ -49,7 +55,7 @@ class NativeMpvPlayer extends EventEmitter {
     this.directUrl = directUrl;
     this.hlsUrl = hlsUrl;
     this.enhancement = ENHANCEMENT_MODES.includes(enhancement) ? enhancement : 'balanced';
-    this.volume = Math.max(0, Math.min(100, Number(volume) || 100));
+    this.volume = clampVolume(volume);
     this.process = null;
     this.windowBridge = null;
     this.socket = null;
@@ -85,6 +91,7 @@ class NativeMpvPlayer extends EventEmitter {
       enhancementActive: false,
       enhancementLabel: 'Starting native player…',
       directPlay: Boolean(directPlay),
+      markers: Array.isArray(item.markers) ? item.markers.map((marker) => ({ ...marker })) : [],
       error: null,
     };
   }
@@ -339,7 +346,7 @@ class NativeMpvPlayer extends EventEmitter {
       await this.command(['seek', position, 'absolute+exact']);
     }
     else if (action === 'volume') {
-      this.state.volume = Math.max(0, Math.min(100, Number(value) || 0));
+      this.state.volume = clampVolume(value, 0);
       this.emitState();
       await this.command(['set_property', 'volume', this.state.volume]);
     }
@@ -412,7 +419,11 @@ class NativeMpvPlayer extends EventEmitter {
   }
 
   snapshot() {
-    return { ...this.state, tracks: this.state.tracks.map((track) => ({ ...track })) };
+    return {
+      ...this.state,
+      tracks: this.state.tracks.map((track) => ({ ...track })),
+      markers: this.state.markers.map((marker) => ({ ...marker })),
+    };
   }
 
   scheduleStateEmit(minimumIntervalMs = 0) {
@@ -463,4 +474,4 @@ class NativeMpvPlayer extends EventEmitter {
   }
 }
 
-module.exports = { NativeMpvPlayer, ENHANCEMENT_MODES, mediaUrl, nativeWindowId, resourcePath };
+module.exports = { NativeMpvPlayer, ENHANCEMENT_MODES, MAX_VOLUME, clampVolume, mediaUrl, nativeWindowId, resourcePath };

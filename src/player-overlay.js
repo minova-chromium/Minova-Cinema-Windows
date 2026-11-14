@@ -6,14 +6,16 @@ const enhancementBadge = document.getElementById('enhancement-badge');
 const message = document.getElementById('message');
 const notice = document.getElementById('notice');
 const trackMenu = document.getElementById('track-menu');
+const skipMarker = document.getElementById('skip-marker');
 const seek = document.getElementById('seek');
 const volume = document.getElementById('volume');
+const volumeValue = document.getElementById('volume-value');
 const time = document.getElementById('time');
 const audioLabel = document.getElementById('audio-label');
 const subtitleLabel = document.getElementById('subtitle-label');
 const enhancementLabel = document.getElementById('enhancement-label');
 const handoffLabel = document.getElementById('handoff-label');
-let state = { paused: false, position: 0, duration: 0, volume: 100, muted: false, tracks: [], enhancement: 'balanced' };
+let state = { paused: false, position: 0, duration: 0, volume: 100, muted: false, tracks: [], markers: [], enhancement: 'balanced' };
 let hideTimer;
 let seeking = false;
 let miniPlayer = false;
@@ -35,6 +37,30 @@ function clock(value) {
 }
 
 function button(action) { return document.querySelector(`[data-action="${action}"]`); }
+
+function activeMarker() {
+  const positionMs = (Number(state.position) || 0) * 1000;
+  return (state.markers || []).find((marker) =>
+    ['intro', 'credits'].includes(marker.type)
+      && positionMs >= Number(marker.startTimeMs)
+      && positionMs < Number(marker.endTimeMs)
+  ) || null;
+}
+
+function renderMarker() {
+  const marker = activeMarker();
+  skipMarker.hidden = !marker;
+  skipMarker.textContent = marker?.type === 'credits' ? 'Skip credits' : 'Skip intro';
+  skipMarker.dataset.endTime = marker ? String(Number(marker.endTimeMs) / 1000) : '';
+}
+
+function renderVolume(value = state.volume) {
+  const level = Math.max(0, Math.min(250, Number(value) || 0));
+  volume.value = state.muted ? 0 : level;
+  volumeValue.textContent = `${Math.round(level)}%`;
+  volumeValue.classList.toggle('boosted', level > 100);
+  volume.setAttribute('aria-valuetext', level > 100 ? `${Math.round(level)} percent, boosted` : `${Math.round(level)} percent`);
+}
 
 function renderWindowMode(mode = {}) {
   if ('miniPlayer' in mode) miniPlayer = Boolean(mode.miniPlayer);
@@ -108,7 +134,8 @@ function render(next) {
     seek.max = Math.max(1, Number(state.duration) || 1);
     seek.value = Math.min(Number(state.position) || 0, Number(seek.max));
   }
-  volume.value = state.muted ? 0 : Number(state.volume) || 0;
+  renderVolume();
+  renderMarker();
   time.textContent = `${clock(state.position)} / ${clock(state.duration)}`;
   const audio = (state.tracks || []).find((track) => track.type === 'audio' && String(track.id) === String(state.audioId));
   const subtitle = (state.tracks || []).find((track) => track.type === 'sub' && String(track.id) === String(state.subtitleId));
@@ -185,6 +212,7 @@ document.addEventListener('click', (event) => {
   else if (action === 'play') command('toggle-pause');
   else if (action === 'rewind') command('seek-relative', -10);
   else if (action === 'forward') command('seek-relative', 10);
+  else if (action === 'skip-marker') command('seek-absolute', Number(skipMarker.dataset.endTime));
   else if (action === 'mute') command('mute');
   else if (action === 'audio') showTracks('audio');
   else if (action === 'subtitles') showTracks('subtitle');
@@ -213,6 +241,7 @@ volume.addEventListener('input', (event) => {
   event.stopPropagation();
   const value = Number(volume.value);
   state.volume = value;
+  renderVolume(value);
   button('mute').dataset.volumeLevel = state.muted || value <= 0 ? 'muted' : value < 50 ? 'low' : 'high';
   clearTimeout(volumeTimer);
   volumeTimer = setTimeout(() => command('volume', value), 70);
@@ -286,7 +315,7 @@ document.addEventListener('keydown', (event) => {
   else if (event.key.startsWith('Arrow') && focusDirectional(event.key)) { event.preventDefault(); }
   else if (event.key === 'ArrowLeft') { event.preventDefault(); command('seek-relative', -10); }
   else if (event.key === 'ArrowRight') { event.preventDefault(); command('seek-relative', 10); }
-  else if (event.key === 'ArrowUp') { event.preventDefault(); command('volume', Math.min(100, state.volume + 5)); }
+  else if (event.key === 'ArrowUp') { event.preventDefault(); command('volume', Math.min(250, state.volume + 5)); }
   else if (event.key === 'ArrowDown') { event.preventDefault(); command('volume', Math.max(0, state.volume - 5)); }
   else if (event.key.toLowerCase() === 'm') command('mute');
   else if (event.key.toLowerCase() === 'h') { event.preventDefault(); handoff(); }

@@ -102,6 +102,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--cyan); outl
 .seek, .volume { height: 18px; margin: 0; accent-color: var(--cyan); cursor: pointer; }
 .seek { width: 100%; }
 .volume { width: 88px; }
+.volume-value { min-width: 39px; color: #9aabb7; font-size: 10px; font-variant-numeric: tabular-nums; text-align: right; }
+.volume-value.boosted { color: var(--cyan); font-weight: 750; }
 .volume-button[data-volume-level="muted"] .sound-low,
 .volume-button[data-volume-level="muted"] .sound-high,
 .volume-button:not([data-volume-level="muted"]) .sound-muted,
@@ -113,6 +115,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--cyan); outl
 .spinner { width: 34px; height: 34px; border: 3px solid rgba(255, 255, 255, .18); border-top-color: var(--cyan); border-radius: 50%; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .notice { position: absolute; z-index: 8; top: 104px; left: 50%; transform: translateX(-50%); padding: 11px 16px; border: 1px solid rgba(33, 217, 233, .25); border-radius: 10px; background: rgba(7, 15, 21, .96); box-shadow: 0 16px 44px rgba(0, 0, 0, .45); }
+.skip-marker { position: absolute; z-index: 8; right: 34px; bottom: 154px; min-width: 132px; padding: 12px 18px; border: 1px solid rgba(145, 248, 255, .72); border-radius: 10px; color: #031116; background: var(--cyan); box-shadow: 0 14px 38px rgba(0, 0, 0, .45); font-size: 13px; font-weight: 800; cursor: pointer; }
+.skip-marker[hidden] { display: none; }
+.skip-marker:hover, .skip-marker:focus-visible { color: #031116; border-color: #d7fdff; background: #75edf5; }
 .track-menu { position: absolute; z-index: 10; right: 24px; bottom: 142px; width: min(410px, calc(100vw - 48px)); max-height: 55vh; padding: 8px; overflow: auto; border: 1px solid var(--line); border-radius: 14px; background: rgba(7, 15, 21, .985); box-shadow: 0 22px 64px rgba(0, 0, 0, .55); }
 .track-menu h3 { margin: 9px 11px 8px; color: var(--muted); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; }
 .track-menu button { display: flex; width: 100%; margin: 2px 0; padding: 12px; align-items: center; gap: 10px; border: 0; border-radius: 9px; color: #eaf1f5; background: transparent; text-align: left; }
@@ -158,6 +163,7 @@ body.mini-player .sound-controls,
 body.mini-player .utility-controls,
 body.mini-player [data-action="fullscreen"] { display: none; }
 body.mini-player .track-menu { display: none; }
+body.mini-player .skip-marker { right: 18px; bottom: 98px; min-width: 112px; padding: 9px 13px; }
 body.mini-player .notice { top: 68px; max-width: calc(100vw - 24px); font-size: 12px; }
 body.mini-player .pin-button { display: inline-flex; align-items: center; justify-content: center; }
 

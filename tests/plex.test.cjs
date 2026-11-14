@@ -16,6 +16,12 @@ test('maps Plex metadata without exposing an authenticated URL', () => {
     thumb: '/library/metadata/42/thumb/1', art: '/library/metadata/42/art/1',
     Genre: [{ tag: 'Drama' }], Role: [{ id: 9, tagKey: 'plex-person-9', tag: 'Ava Stone', role: 'Lead', thumb: '/library/people/9/thumb' }],
     Producer: [{ id: 10, tag: 'Maya North', thumb: '/library/people/10/thumb' }],
+    Marker: [
+      { type: 'credits', startTimeOffset: 540000, endTimeOffset: 599000, final: true },
+      { type: 'intro', startTimeOffset: 30000, endTimeOffset: 90000 },
+      { type: 'commercial', startTimeOffset: 100000, endTimeOffset: 110000 },
+      { type: 'intro', startTimeOffset: 200000, endTimeOffset: 150000 },
+    ],
     Media: [{ container: 'mkv', videoCodec: 'hevc', Part: [{ id: 7, key: '/library/parts/7/file.mkv' }] }],
   });
   assert.equal(item.title, 'Example');
@@ -27,6 +33,10 @@ test('maps Plex metadata without exposing an authenticated URL', () => {
   assert.deepEqual(item.credits[0], { name: 'Ava Stone', role: 'Lead', imagePath: '/library/people/9/thumb', personId: 'plex-person-9' });
   assert.deepEqual(item.credits[1], { name: 'Maya North', role: 'Producer', imagePath: '/library/people/10/thumb', personId: '10' });
   assert.equal(item.playback.directPath, '/library/parts/7/file.mkv');
+  assert.deepEqual(item.markers, [
+    { type: 'intro', startTimeMs: 30000, endTimeMs: 90000, final: false },
+    { type: 'credits', startTimeMs: 540000, endTimeMs: 599000, final: true },
+  ]);
   assert.equal(JSON.stringify(item).includes('X-Plex-Token'), false);
 });
 

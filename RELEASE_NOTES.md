@@ -1,20 +1,23 @@
-# Minova Cinema Desktop 1.1.0
+# Minova Cinema Desktop 1.1.1
 
-This update keeps Minova Cinema useful during an internet outage when your Windows PC can still reach its Plex server over the local network, and makes offline libraries retain their artwork.
+This playback update adds native Plex intro and credits skipping and gives quiet media additional volume headroom without changing the established desktop interface.
 
 ## Highlights
 
-- Discovers the saved Plex server over the local wired or Wi-Fi network and automatically prefers its validated LAN route when available.
-- Keeps browsing, artwork, playback, progress, and watched-state updates working locally when the internet or an external Plex address is unavailable.
-- Verifies the discovered Plex machine identity before switching routes, so Minova does not connect to a different server on multi-server networks.
-- Adds an optional persistent artwork cache for posters, backdrops, and cast images, bounded to 512 MB with usage reporting and a clear-cache action in Settings.
-- Retains remote, Tailscale, reverse-proxy, and Plex relay addresses as fallbacks when the local server cannot be reached.
-- Smooths season switching and episode loading in the Experimental UI while preserving the Stable UI, native playback, updater, and branded installer.
+- Shows a contextual **Skip intro** button while playback is inside a valid Plex intro marker.
+- Shows a contextual **Skip credits** button while playback is inside a valid Plex credits marker.
+- Seeks to Plex's exact marker endpoint instead of estimating intro or credits timings.
+- Extends native playback volume from 100% to 250%, with 100% retained as the normal reference level.
+- Displays the current volume percentage and highlights levels above 100% as boosted.
+- Remembers the selected boosted volume between playback sessions.
+- Keeps the existing Stable and Experimental desktop interfaces, mini-player, native playback, offline LAN support, automatic updater, and branded installer intact.
+
+Skip controls require the Plex server to provide an intro or credits marker for the playing item. Titles without marker data continue playing normally without showing a skip button.
 
 Users on 1.0.0 need to install a newer build manually once because 1.0.0 did not contain the updater. Versions 1.0.2 and newer can discover and install this release from inside the app.
 
 ## Installer verification
 
-`Minova-Cinema-Desktop-1.1.0-Setup.exe`
+`Minova-Cinema-Desktop-1.1.1-Setup.exe`
 
-SHA-256: `91FCD158CA5BC02EE0CD34C0DA57369B0E8CFF7353CD4E5A84389D44B6015D1D`
+SHA-256: `D5D62B891368B59EA7C67A70C31E8E13B066E0FD13EF81D9118E77F1E367AFA3`

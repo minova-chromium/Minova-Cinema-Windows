@@ -104,6 +104,21 @@ function mapCredit(person = {}, fallbackRole) {
   };
 }
 
+function mapMarkers(markers = []) {
+  return markers.map((marker) => ({
+    type: String(marker?.type || '').toLowerCase(),
+    startTimeMs: Number(marker?.startTimeOffset),
+    endTimeMs: Number(marker?.endTimeOffset),
+    final: Boolean(marker?.final),
+  })).filter((marker) =>
+    ['intro', 'credits'].includes(marker.type)
+      && Number.isFinite(marker.startTimeMs)
+      && Number.isFinite(marker.endTimeMs)
+      && marker.startTimeMs >= 0
+      && marker.endTimeMs > marker.startTimeMs
+  ).sort((left, right) => left.startTimeMs - right.startTimeMs);
+}
+
 function mapMetadata(metadata = {}) {
   const kind = ({ show: 'show', season: 'season', episode: 'episode', clip: 'extra' })[metadata.type] || 'movie';
   const media = (metadata.Media || [])[0] || {};
@@ -153,6 +168,7 @@ function mapMetadata(metadata = {}) {
     audienceRating: metadata.audienceRating ?? metadata.rating ?? null,
     extraType: metadata.extraType || metadata.subtype || null,
     extras,
+    markers: mapMarkers(metadata.Marker),
     credits: [
       ...(metadata.Role || []).map((person) => mapCredit(person, 'Cast')),
       ...(metadata.Director || []).map((person) => mapCredit(person, 'Director')),

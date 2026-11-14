@@ -2,12 +2,13 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { NativeMpvPlayer } = require('../src/native-player.cjs');
+const { NativeMpvPlayer, MAX_VOLUME } = require('../src/native-player.cjs');
 
 test('native playback follows the audio clock without interpolation drift', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'native-host', 'LibMpvHost.cs'), 'utf8');
   assert.match(source, /\{ "video-sync", "audio" \}/);
   assert.match(source, /\{ "interpolation", "no" \}/);
+  assert.match(source, /\{ "volume-max", "250" \}/);
   assert.doesNotMatch(source, /\{ "tscale",/);
 });
 
@@ -75,4 +76,42 @@ test('playback controls update immediately without a full property refresh', asy
     ['seek', 10, 'relative+keyframes'],
     ['set_property', 'volume', 63],
   ]);
+});
+
+test('native playback exposes Plex markers and supports amplified volume up to 250 percent', async () => {
+  const commands = [];
+  const markers = [
+    { type: 'intro', startTimeMs: 20000, endTimeMs: 70000, final: false },
+    { type: 'credits', startTimeMs: 3500000, endTimeMs: 3590000, final: true },
+  ];
+  const player = new NativeMpvPlayer({
+    window: {},
+    client: { timeline: async () => {} },
+    item: { ratingKey: '8', title: 'Boost test', durationMs: 3_600_000, viewOffsetMs: 0, technical: {}, markers },
+    directUrl: 'file:///boost-test.mkv',
+    hlsUrl: null,
+    volume: 175,
+  });
+  player.command = async (command) => { commands.push(command); return true; };
+
+  assert.equal(MAX_VOLUME, 250);
+  assert.equal(player.snapshot().volume, 175);
+  assert.deepEqual(player.snapshot().markers, markers);
+  assert.equal((await player.execute('volume', 225)).volume, 225);
+  assert.equal((await player.execute('volume', 999)).volume, 250);
+  assert.deepEqual(commands, [
+    ['set_property', 'volume', 225],
+    ['set_property', 'volume', 250],
+  ]);
+});
+
+test('player overlay offers marker skip controls and labels amplified volume', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'src', 'player-overlay.html'), 'utf8');
+  const script = fs.readFileSync(path.join(__dirname, '..', 'src', 'player-overlay.js'), 'utf8');
+  assert.match(html, /id="skip-marker"[^>]+data-action="skip-marker"/);
+  assert.match(html, /id="volume"[^>]+max="250"/);
+  assert.match(html, /id="volume-value"/);
+  assert.match(script, /marker\?\.type === 'credits' \? 'Skip credits' : 'Skip intro'/);
+  assert.match(script, /command\('seek-absolute', Number\(skipMarker\.dataset\.endTime\)\)/);
+  assert.match(script, /classList\.toggle\('boosted', level > 100\)/);
 });

@@ -25,6 +25,7 @@
     <section id="message" class="message"><span class="spinner"></span><strong>Preparing playback…</strong></section>
     <section id="notice" class="notice" hidden></section>
     <section id="track-menu" class="track-menu" hidden></section>
+    <button id="skip-marker" class="skip-marker" data-action="skip-marker" hidden>Skip intro</button>
 
     <footer class="player-chrome player-controls">
       <div class="timeline-row">
@@ -49,7 +50,8 @@
           <button class="icon-button volume-button" data-action="mute" aria-label="Mute" title="Mute">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path class="speaker" d="M4 9v6h4l5 4V5L8 9z"/><path class="sound-low" d="M16 9.5a4 4 0 0 1 0 5"/><path class="sound-high" d="M18.5 7a7.5 7.5 0 0 1 0 10"/><path class="sound-muted" d="m16 9 5 6m0-6-5 6"/></svg>
           </button>
-          <input id="volume" class="volume" type="range" min="0" max="100" value="100" step="1" aria-label="Volume">
+          <input id="volume" class="volume" type="range" min="0" max="250" value="100" step="1" aria-label="Volume, 100 percent is normal">
+          <output id="volume-value" class="volume-value" for="volume">100%</output>
         </div>
         <div class="utility-controls">
           <button class="menu-button" data-action="audio" title="Audio tracks"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 14v-4a7 7 0 0 1 14 0v4M5 14H3v5h4v-5zm14 0h2v5h-4v-5z"/></svg><span id="audio-label">Audio</span></button>
