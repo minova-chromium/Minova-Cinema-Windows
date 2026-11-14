@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { NativeMpvPlayer, MAX_VOLUME } = require('../src/native-player.cjs');
+const { NativeMpvPlayer, MAX_VOLUME, SHADOW_DETAIL_MODES, playbackPreferenceKey } = require('../src/native-player.cjs');
 
 test('native playback follows the audio clock without interpolation drift', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'native-host', 'LibMpvHost.cs'), 'utf8');
@@ -114,4 +114,57 @@ test('player overlay offers marker skip controls and labels amplified volume', (
   assert.match(script, /marker\?\.type === 'credits' \? 'Skip credits' : 'Skip intro'/);
   assert.match(script, /command\('seek-absolute', Number\(skipMarker\.dataset\.endTime\)\)/);
   assert.match(script, /classList\.toggle\('boosted', level > 100\)/);
+});
+
+test('shadow detail preferences follow a show across episodes but remain title-specific for movies', () => {
+  assert.equal(playbackPreferenceKey({ kind: 'episode', ratingKey: '101', grandparentRatingKey: '42' }), 'show:42');
+  assert.equal(playbackPreferenceKey({ kind: 'episode', ratingKey: '102', grandparentRatingKey: '42' }), 'show:42');
+  assert.equal(playbackPreferenceKey({ kind: 'movie', ratingKey: '77' }), 'movie:77');
+});
+
+test('native playback composes shadow detail with existing GPU enhancement shaders', async () => {
+  const commands = [];
+  const player = new NativeMpvPlayer({
+    window: {},
+    client: { timeline: async () => {} },
+    item: { ratingKey: '101', grandparentRatingKey: '42', kind: 'episode', title: 'Dark scene', durationMs: 1000, viewOffsetMs: 0, technical: {} },
+    directUrl: 'file:///dark-scene.mkv',
+    hlsUrl: null,
+    enhancement: 'high',
+  });
+  player.command = async (command) => { commands.push(command); return true; };
+
+  const state = await player.execute('shadow-detail', 'medium');
+  assert.deepEqual(SHADOW_DETAIL_MODES, ['off', 'low', 'medium', 'high']);
+  assert.equal(state.shadowDetail, 'medium');
+  assert.equal(state.shadowDetailScope, 'show');
+  assert.equal(player.shadowDetailKey, 'show:42');
+  assert.equal(commands[0][0], 'change-list');
+  assert.match(commands[1][3], /ArtCNN_C4F16\.glsl$/);
+  assert.match(commands[2][3], /ShadowDetail_medium\.glsl$/);
+});
+
+test('shadow detail shaders preserve true black and use progressively stronger toe lifts', () => {
+  const strengths = ['low', 'medium', 'high'].map((mode) => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'vendor', 'shaders', `ShadowDetail_${mode}.glsl`), 'utf8');
+    assert.match(source, /\/\/!HOOK MAIN/);
+    assert.match(source, /black_guard = smoothstep\(0\.003, 0\.025, luma\)/);
+    return Number(source.match(/luma \+ ([0-9.]+) \* black_guard/)?.[1]);
+  });
+  assert.deepEqual(strengths, [0.018, 0.035, 0.055]);
+});
+
+test('player overlay exposes a per-title shadow detail cycle', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'src', 'player-overlay.html'), 'utf8');
+  const script = fs.readFileSync(path.join(__dirname, '..', 'src', 'player-overlay.js'), 'utf8');
+  assert.match(html, /data-action="shadow-detail"/);
+  assert.match(script, /const modes = \['off', 'low', 'medium', 'high'\]/);
+  assert.match(script, /Shadow detail for this \$\{state\.shadowDetailScope === 'show' \? 'show' : 'title'\}/);
+});
+
+test('main process persists shadow detail by the active show or title key', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'main.cjs'), 'utf8');
+  assert.match(source, /shadowDetail: stored\.shadowDetailByMedia\?\.\[playbackPreferenceKey\(item\)\] \|\| 'off'/);
+  assert.match(source, /preferences\[player\.shadowDetailKey\] = state\.shadowDetail/);
+  assert.match(source, /delete preferences\[player\.shadowDetailKey\]/);
 });

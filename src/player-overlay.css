@@ -93,6 +93,7 @@ body.maximized .maximize-glyph::after { content: ""; position: absolute; width: 
 .seek-button svg text { fill: currentColor; stroke: none; font-size: 7px; font-weight: 800; text-anchor: middle; }
 .pin-button { display: none; }
 .pin-button.active { color: #031116; border-color: #91f8ff; background: var(--cyan); }
+.shadow-detail-button.active { color: #8df4fb; border-color: rgba(33, 217, 233, .28); background: var(--cyan-soft); }
 .enhancement-button { color: #7feaf2; background: var(--cyan-soft); }
 button:hover { color: #fff; border-color: rgba(151, 177, 194, .2); background: rgba(247, 251, 253, .115); }
 .play-button:hover { color: #031116; border-color: #c5fbff; background: #68e9f2; transform: scale(1.04); }
@@ -137,7 +138,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--cyan); outl
   .menu-button { max-width: 142px; padding-inline: 9px; }
   .volume { width: 70px; }
   .enhancement-button span { display: none; }
-  .enhancement-button { min-width: 42px; }
+  .enhancement-button, .shadow-detail-button { min-width: 42px; }
+  .shadow-detail-button span { display: none; }
 }
 
 @media (max-width: 1050px) {

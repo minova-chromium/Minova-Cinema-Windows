@@ -13,9 +13,10 @@ const volumeValue = document.getElementById('volume-value');
 const time = document.getElementById('time');
 const audioLabel = document.getElementById('audio-label');
 const subtitleLabel = document.getElementById('subtitle-label');
+const shadowDetailLabel = document.getElementById('shadow-detail-label');
 const enhancementLabel = document.getElementById('enhancement-label');
 const handoffLabel = document.getElementById('handoff-label');
-let state = { paused: false, position: 0, duration: 0, volume: 100, muted: false, tracks: [], markers: [], enhancement: 'balanced' };
+let state = { paused: false, position: 0, duration: 0, volume: 100, muted: false, tracks: [], markers: [], enhancement: 'balanced', shadowDetail: 'off' };
 let hideTimer;
 let seeking = false;
 let miniPlayer = false;
@@ -125,6 +126,11 @@ function render(next) {
   qualityBadge.textContent = state.directPlay === false ? 'PLEX TRANSCODE' : 'DIRECT PLAY';
   enhancementBadge.textContent = state.enhancementLabel || 'GPU Balanced';
   enhancementLabel.textContent = ({ off: 'Off', balanced: 'Balanced', high: 'ArtCNN High', ultra: 'ArtCNN Ultra' })[state.enhancement] || 'Balanced';
+  shadowDetailLabel.textContent = ({ off: 'Shadows off', low: 'Shadows low', medium: 'Shadows medium', high: 'Shadows high' })[state.shadowDetail] || 'Shadows off';
+  const shadowControl = button('shadow-detail');
+  shadowControl.classList.toggle('active', state.shadowDetail !== 'off');
+  shadowControl.setAttribute('aria-label', `Shadow detail ${state.shadowDetail || 'off'}`);
+  shadowControl.title = `Shadow detail for this ${state.shadowDetailScope === 'show' ? 'show' : 'title'}: ${state.shadowDetail || 'off'}`;
   button('play').classList.toggle('is-paused', Boolean(state.paused));
   button('play').setAttribute('aria-label', state.paused ? 'Play' : 'Pause');
   const volumeLevel = state.muted || state.volume <= 0 ? 'muted' : state.volume < 50 ? 'low' : 'high';
@@ -218,6 +224,10 @@ document.addEventListener('click', (event) => {
   else if (action === 'subtitles') showTracks('subtitle');
   else if (action === 'handoff') handoff();
   else if (action === 'resync') command('resync');
+  else if (action === 'shadow-detail') {
+    const modes = ['off', 'low', 'medium', 'high'];
+    command('shadow-detail', modes[(modes.indexOf(state.shadowDetail) + 1) % modes.length]);
+  }
   else if (action === 'pin') window.nativePlayer.pinMiniPlayer(!miniPlayerPinned).then((pinned) => renderWindowMode({ miniPlayer: true, miniPlayerPinned: pinned }));
   else if (action === 'mini-player') window.nativePlayer.miniPlayer(!miniPlayer).then((enabled) => renderWindowMode({ miniPlayer: enabled, miniPlayerPinned: enabled }));
   else if (action === 'fullscreen') window.nativePlayer.fullscreen();

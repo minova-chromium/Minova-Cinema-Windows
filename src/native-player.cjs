@@ -7,12 +7,18 @@ const os = require('node:os');
 const path = require('node:path');
 
 const ENHANCEMENT_MODES = ['off', 'balanced', 'high', 'ultra'];
+const SHADOW_DETAIL_MODES = ['off', 'low', 'medium', 'high'];
 const PROGRESS_UPDATE_INTERVAL_MS = 200;
 const MAX_VOLUME = 250;
 
 function clampVolume(value, fallback = 100) {
   const number = Number(value);
   return Math.max(0, Math.min(MAX_VOLUME, Number.isFinite(number) ? number : fallback));
+}
+
+function playbackPreferenceKey(item = {}) {
+  if (item.kind === 'episode' && item.grandparentRatingKey) return `show:${item.grandparentRatingKey}`;
+  return `${item.kind || 'media'}:${item.ratingKey || 'unknown'}`;
 }
 
 function resourcePath(...segments) {
@@ -47,7 +53,7 @@ function safeTrack(track, index) {
 }
 
 class NativeMpvPlayer extends EventEmitter {
-  constructor({ window, client, item, directUrl, hlsUrl, directPlay = true, enhancement = 'balanced', volume = 100 }) {
+  constructor({ window, client, item, directUrl, hlsUrl, directPlay = true, enhancement = 'balanced', shadowDetail = 'off', volume = 100 }) {
     super();
     this.window = window;
     this.client = client;
@@ -55,6 +61,8 @@ class NativeMpvPlayer extends EventEmitter {
     this.directUrl = directUrl;
     this.hlsUrl = hlsUrl;
     this.enhancement = ENHANCEMENT_MODES.includes(enhancement) ? enhancement : 'balanced';
+    this.shadowDetail = SHADOW_DETAIL_MODES.includes(shadowDetail) ? shadowDetail : 'off';
+    this.shadowDetailKey = playbackPreferenceKey(item);
     this.volume = clampVolume(volume);
     this.process = null;
     this.windowBridge = null;
@@ -90,6 +98,8 @@ class NativeMpvPlayer extends EventEmitter {
       enhancement: this.enhancement,
       enhancementActive: false,
       enhancementLabel: 'Starting native player…',
+      shadowDetail: this.shadowDetail,
+      shadowDetailScope: item.kind === 'episode' && item.grandparentRatingKey ? 'show' : 'title',
       directPlay: Boolean(directPlay),
       markers: Array.isArray(item.markers) ? item.markers.map((marker) => ({ ...marker })) : [],
       error: null,
@@ -366,6 +376,7 @@ class NativeMpvPlayer extends EventEmitter {
       await this.command(['set_property', 'sid', this.state.subtitleId == null ? 'no' : this.state.subtitleId]);
     }
     else if (action === 'enhancement') await this.applyEnhancement(String(value));
+    else if (action === 'shadow-detail') await this.applyShadowDetail(String(value));
     else if (action === 'resync') await this.command(['seek', 0, 'relative+exact']);
     return this.snapshot();
   }
@@ -373,14 +384,8 @@ class NativeMpvPlayer extends EventEmitter {
   async applyEnhancement(mode) {
     this.enhancement = ENHANCEMENT_MODES.includes(mode) ? mode : 'balanced';
     this.state.enhancement = this.enhancement;
-    await this.command(['change-list', 'glsl-shaders', 'clr', '']);
+    await this.applyShaders();
     const neural = this.enhancement === 'high' || this.enhancement === 'ultra';
-    const shader = this.enhancement === 'ultra' ? 'ArtCNN_C4F32.glsl' : neural ? 'ArtCNN_C4F16.glsl' : null;
-    if (shader) {
-      const shaderPath = resourcePath('vendor', 'shaders', shader);
-      if (fs.existsSync(shaderPath)) await this.command(['change-list', 'glsl-shaders', 'append', shaderPath]);
-      else this.enhancement = 'balanced';
-    }
     const enabled = this.enhancement !== 'off' && (!this.state.sourceHeight || this.state.sourceHeight <= 1080);
     await this.command(['set_property', 'scale', enabled ? 'ewa_lanczossharp' : 'bilinear']);
     await this.command(['set_property', 'cscale', enabled ? 'ewa_lanczossharp' : 'bilinear']);
@@ -389,6 +394,32 @@ class NativeMpvPlayer extends EventEmitter {
     await this.command(['set_property', 'deband', enabled ? 'yes' : 'no']);
     this.refreshEnhancementLabel();
     this.emitState();
+  }
+
+  async applyShadowDetail(mode) {
+    this.shadowDetail = SHADOW_DETAIL_MODES.includes(mode) ? mode : 'off';
+    this.state.shadowDetail = this.shadowDetail;
+    await this.applyShaders();
+    this.emitState();
+  }
+
+  async applyShaders() {
+    await this.command(['change-list', 'glsl-shaders', 'clr', '']);
+    const neural = this.enhancement === 'high' || this.enhancement === 'ultra';
+    const shader = this.enhancement === 'ultra' ? 'ArtCNN_C4F32.glsl' : neural ? 'ArtCNN_C4F16.glsl' : null;
+    if (shader) {
+      const shaderPath = resourcePath('vendor', 'shaders', shader);
+      if (fs.existsSync(shaderPath)) await this.command(['change-list', 'glsl-shaders', 'append', shaderPath]);
+      else this.enhancement = 'balanced';
+    }
+    if (this.shadowDetail !== 'off') {
+      const shadowShader = resourcePath('vendor', 'shaders', `ShadowDetail_${this.shadowDetail}.glsl`);
+      if (fs.existsSync(shadowShader)) await this.command(['change-list', 'glsl-shaders', 'append', shadowShader]);
+      else {
+        this.shadowDetail = 'off';
+        this.state.shadowDetail = 'off';
+      }
+    }
   }
 
   refreshEnhancementLabel() {
@@ -474,4 +505,7 @@ class NativeMpvPlayer extends EventEmitter {
   }
 }
 
-module.exports = { NativeMpvPlayer, ENHANCEMENT_MODES, MAX_VOLUME, clampVolume, mediaUrl, nativeWindowId, resourcePath };
+module.exports = {
+  NativeMpvPlayer, ENHANCEMENT_MODES, SHADOW_DETAIL_MODES, MAX_VOLUME,
+  clampVolume, playbackPreferenceKey, mediaUrl, nativeWindowId, resourcePath,
+};

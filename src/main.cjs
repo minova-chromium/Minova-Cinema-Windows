@@ -7,7 +7,7 @@ const { PlexClient, isPlexOwnedHost, isTrustedExternalArtworkUrl, normalizeServe
 const { awaitPlexAuthorization, createPlexPin, discoverPlexServers } = require('./plex-auth.cjs');
 const { isDirectLanUri, serverCandidateUris, tryServerCandidates } = require('./lan-connections.cjs');
 const { discoverLanPlexServers } = require('./plex-lan-discovery.cjs');
-const { NativeMpvPlayer, mediaUrl } = require('./native-player.cjs');
+const { NativeMpvPlayer, mediaUrl, playbackPreferenceKey } = require('./native-player.cjs');
 const { ensureClientIdentifier, migrateLegacySettings, readSettings, selectConnectionToken, writeSettings } = require('./settings.cjs');
 const { miniPlayerBounds, resizePlaybackBounds } = require('./window-modes.cjs');
 
@@ -682,10 +682,21 @@ function registerIpc() {
   ipcMain.handle('native-player:start', async (_event, { key, quality }) => startNativePlayback(key, quality));
   ipcMain.handle('native-player:command', async (_event, { action, value }) => {
     if (!nativePlayer) throw new Error('The native player is not active.');
-    const state = await nativePlayer.execute(action, value);
+    const player = nativePlayer;
+    const state = await player.execute(action, value);
     if (action === 'enhancement' || action === 'volume') {
       const stored = readStored();
       writeStored({ ...stored, enhancement: state.enhancement, volume: state.volume });
+    }
+    if (action === 'shadow-detail') {
+      const stored = readStored();
+      const preferences = stored.shadowDetailByMedia && typeof stored.shadowDetailByMedia === 'object'
+        ? { ...stored.shadowDetailByMedia }
+        : {};
+      if (state.shadowDetail === 'off') delete preferences[player.shadowDetailKey];
+      else preferences[player.shadowDetailKey] = state.shadowDetail;
+      const recentPreferences = Object.fromEntries(Object.entries(preferences).slice(-250));
+      writeStored({ ...stored, shadowDetailByMedia: recentPreferences });
     }
     return state;
   });
@@ -915,6 +926,7 @@ async function startNativePlayback(key, quality = 'original') {
     hlsUrl: preferDirect ? transcode : null,
     directPlay: preferDirect,
     enhancement: stored.enhancement || 'balanced',
+    shadowDetail: stored.shadowDetailByMedia?.[playbackPreferenceKey(item)] || 'off',
     volume: Number.isFinite(stored.volume) ? stored.volume : 100,
   });
   const overlay = createPlayerOverlay();
